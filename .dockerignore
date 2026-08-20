@@ -1,0 +1,12 @@
+.git
+.github
+.vs
+**/bin
+**/obj
+**/*.user
+**/*.db
+**/*.db-shm
+**/*.db-wal
+src/HealthTracker.Web/settings.Development.json
+src/HealthTracker.Web/App_Data
+README.md

@@ -44,6 +44,17 @@ Never commit a real client secret. In CI/CD or hosted environments, use secret s
 
 SQLite is the default adapter and stores data in the configured application data directory. The persistence boundary is database-agnostic; provider changes belong in the Infrastructure composition root and migration workflow. In hosted deployments, persist the ASP.NET Core data-protection keys on durable protected storage so authentication cookies survive restarts.
 
+### Container image
+
+The CI workflow publishes the production image to GitHub Container Registry after successful pushes to `main`:
+
+```text
+ghcr.io/dashwort/healthpulse:latest
+ghcr.io/dashwort/healthpulse:sha-<commit>
+```
+
+The container listens on port `8080`. Supply production OIDC settings through environment variables such as `Authentication__OpenIdConnect__Authority`, `Authentication__OpenIdConnect__ClientId`, and `Authentication__OpenIdConnect__ClientSecret`. Mount durable storage at `/app/App_Data` to retain the SQLite database and ASP.NET Core data-protection keys across container replacements.
+
 Create future migrations with the EF Core 10 tool:
 
 ```powershell
