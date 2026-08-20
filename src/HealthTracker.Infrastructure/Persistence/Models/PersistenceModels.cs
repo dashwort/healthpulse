@@ -1,0 +1,108 @@
+namespace HealthTracker.Infrastructure.Persistence.Models
+{
+    public sealed class UserRecord
+    {
+        public Guid Id
+        {
+            get; set;
+        }
+        public string Subject { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public DateTimeOffset CreatedUtc
+        {
+            get; set;
+        }
+    }
+
+    public sealed class TemplateRecord
+    {
+        public Guid Id
+        {
+            get; set;
+        }
+        public Guid? OwnerUserId
+        {
+            get; set;
+        }
+        public string? Code
+        {
+            get; set;
+        }
+        public string Name { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string UnitCategory { get; set; } = string.Empty;
+        public string NormalizedUnit { get; set; } = string.Empty;
+        public string AllowedUnits { get; set; } = string.Empty;
+        public DateTimeOffset CreatedUtc
+        {
+            get; set;
+        }
+        public DateTimeOffset? DeletedUtc
+        {
+            get; set;
+        }
+    }
+
+    public sealed class TrackedTemplateRecord
+    {
+        public Guid Id
+        {
+            get; set;
+        }
+        public Guid UserId
+        {
+            get; set;
+        }
+        public Guid TemplateId
+        {
+            get; set;
+        }
+        public TemplateRecord Template { get; set; } = null!;
+        public DateTimeOffset CreatedUtc
+        {
+            get; set;
+        }
+        public DateTimeOffset? DeletedUtc
+        {
+            get; set;
+        }
+    }
+
+    public sealed class ReadingRecord
+    {
+        public Guid Id
+        {
+            get; set;
+        }
+        public Guid UserId
+        {
+            get; set;
+        }
+        public Guid TemplateId
+        {
+            get; set;
+        }
+        public TemplateRecord Template { get; set; } = null!;
+        public decimal Value
+        {
+            get; set;
+        }
+        public string Unit { get; set; } = string.Empty;
+        public string? Note
+        {
+            get; set;
+        }
+        public DateTimeOffset RecordedAtUtc
+        {
+            get; set;
+        }
+        public DateTimeOffset CreatedUtc
+        {
+            get; set;
+        }
+        public DateTimeOffset? DeletedUtc
+        {
+            get; set;
+        }
+    }
+}

@@ -1,0 +1,11 @@
+{
+  "Authentication":
+  {
+      "OpenIdConnect": { "Authority": "https://accounts.google.com",
+                         "ClientId": "your-client-id.apps.googleusercontent.com",
+                         "ClientSecret": "store-this-in-user-secrets-instead",
+                         "CallbackPath": "/signin-oidc",
+                         "Scopes": [ "openid", "profile", "email" ]
+      }
+  }
+}

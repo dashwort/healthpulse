@@ -1,0 +1,35 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JS
+
+<MudThemeProvider Theme="theme" IsDarkMode="isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudLayout>
+    <MudAppBar Color="MudBlazor.Color.Primary" Elevation="1"><MudText Typo="Typo.h6">HealthPulse</MudText><MudSpacer /><MudIconButton Icon="@(isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" aria-label="Toggle colour theme" OnClick="ToggleThemeAsync" /><MudButton Href="/logout" Variant="Variant.Text" Color="MudBlazor.Color.Inherit">Sign out</MudButton></MudAppBar>
+    <MudDrawer Open="true" Variant="DrawerVariant.Responsive" Elevation="1"><MudNavMenu><MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink><MudNavLink Href="/templates" Icon="@Icons.Material.Filled.Tune">Templates</MudNavLink><MudNavLink Href="/readings" Icon="@Icons.Material.Filled.MonitorHeart">Readings</MudNavLink></MudNavMenu></MudDrawer>
+    <MudMainContent Class="pa-6 mt-12">@Body</MudMainContent>
+</MudLayout>
+
+@code {
+    private bool isDarkMode;
+    private readonly MudTheme theme = new()
+    {
+        PaletteLight = new PaletteLight { Primary = "#2563eb", Secondary = "#0f766e", Background = "#f7f9fc", AppbarBackground = "#ffffff" },
+        PaletteDark = new PaletteDark { Primary = "#93c5fd", Secondary = "#5eead4", Background = "#111827", Surface = "#1f2937", AppbarBackground = "#172033" }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var saved = await JS.InvokeAsync<string?>("healthTrackerTheme.get");
+        isDarkMode = saved is null ? await JS.InvokeAsync<bool>("healthTrackerTheme.prefersDark") : saved == "dark";
+        StateHasChanged();
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        isDarkMode = !isDarkMode;
+        await JS.InvokeVoidAsync("healthTrackerTheme.set", isDarkMode ? "dark" : "light");
+    }
+}

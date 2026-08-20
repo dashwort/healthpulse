@@ -1,0 +1,3 @@
+# CSharpier does not support block-scoped namespaces or breaking after each ';'.
+# Use `dotnet format` for this repo.
+**/*.cs

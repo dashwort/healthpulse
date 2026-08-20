@@ -1,0 +1,210 @@
+using HealthTracker.Application.Abstractions;
+using HealthTracker.Domain.Models;
+using HealthTracker.Infrastructure.Persistence.Mappings;
+
+using Microsoft.EntityFrameworkCore;
+
+namespace HealthTracker.Infrastructure.Persistence
+{
+    public sealed class EfHealthDataStore(HealthTrackerDbContext db) : IHealthDataStore
+    {
+        public async Task<ApplicationUser?> FindUserBySubjectAsync(
+            string subject,
+            CancellationToken ct
+        )
+        {
+            return (await db.Users.SingleOrDefaultAsync(x => x.Subject == subject, ct))?.ToDomain();
+        }
+
+        public Task AddUserAsync(ApplicationUser user, CancellationToken ct)
+        {
+            return db.Users.AddAsync(user.ToRecord(), ct).AsTask();
+        }
+
+        public async Task<IReadOnlyCollection<MeasurementTemplate>> GetCatalogueAsync(
+            CancellationToken ct
+        )
+        {
+            return [
+                .. (
+                    await db
+                        .Templates.AsNoTracking()
+                        .Where(x => x.DeletedUtc == null)
+                        .OrderBy(x => x.Name)
+                        .ToArrayAsync(ct)
+                ).Select(x => x.ToDomain()),
+            ];
+        }
+
+        public async Task<MeasurementTemplate?> GetTemplateForUserAsync(
+            Guid userId,
+            Guid templateId,
+            bool includeDeleted,
+            CancellationToken ct
+        )
+        {
+            return (
+                await db.Templates.SingleOrDefaultAsync(
+                    x =>
+                        x.Id == templateId
+                        && (x.OwnerUserId == null || x.OwnerUserId == userId)
+                        && (includeDeleted || x.DeletedUtc == null),
+                    ct
+                )
+            )?.ToDomain();
+        }
+
+        public async Task<IReadOnlyCollection<UserTrackedTemplate>> GetTrackedTemplatesAsync(
+            Guid userId,
+            CancellationToken ct
+        )
+        {
+            return [
+                .. (
+                    await db
+                        .TrackedTemplates.Include(x => x.Template)
+                        .AsNoTracking()
+                        .Where(x =>
+                            x.UserId == userId && x.DeletedUtc == null && x.Template.DeletedUtc == null
+                        )
+                        .ToArrayAsync(ct)
+                ).Select(x => x.ToDomain()),
+            ];
+        }
+
+        public async Task<UserTrackedTemplate?> GetTrackingAsync(
+            Guid userId,
+            Guid templateId,
+            bool includeDeleted,
+            CancellationToken ct
+        )
+        {
+            return (
+                await db
+                    .TrackedTemplates.Include(x => x.Template)
+                    .SingleOrDefaultAsync(
+                        x =>
+                            x.UserId == userId
+                            && x.TemplateId == templateId
+                            && (includeDeleted || x.DeletedUtc == null)
+                            && x.Template.DeletedUtc == null,
+                        ct
+                    )
+            )?.ToDomain();
+        }
+
+        public Task AddTrackingAsync(UserTrackedTemplate tracking, CancellationToken ct)
+        {
+            return db.TrackedTemplates.AddAsync(tracking.ToRecord(), ct).AsTask();
+        }
+
+        public async Task UpdateTrackingAsync(UserTrackedTemplate tracking, CancellationToken ct)
+        {
+            var record = await db.TrackedTemplates.SingleAsync(
+                x => x.Id == tracking.Id && x.UserId == tracking.UserId,
+                ct
+            );
+            tracking.Apply(record);
+        }
+
+        public Task AddTemplateAsync(MeasurementTemplate template, CancellationToken ct)
+        {
+            return db.Templates.AddAsync(template.ToRecord(), ct).AsTask();
+        }
+
+        public async Task UpdateTemplateAsync(MeasurementTemplate template, CancellationToken ct)
+        {
+            var record = await db.Templates.SingleAsync(x => x.Id == template.Id, ct);
+            template.Apply(record);
+        }
+
+        public Task AddReadingAsync(HealthReading reading, CancellationToken ct)
+        {
+            return db.Readings.AddAsync(reading.ToRecord(), ct).AsTask();
+        }
+
+        public async Task<HealthReading?> GetReadingAsync(
+            Guid userId,
+            Guid readingId,
+            bool includeDeleted,
+            CancellationToken ct
+        )
+        {
+            return (
+                await db
+                    .Readings.Include(x => x.Template)
+                    .SingleOrDefaultAsync(
+                        x =>
+                            x.Id == readingId
+                            && x.UserId == userId
+                            && (includeDeleted || x.DeletedUtc == null),
+                        ct
+                    )
+            )?.ToDomain();
+        }
+
+        public async Task<IReadOnlyCollection<HealthReading>> GetReadingsAsync(
+            Guid userId,
+            Guid? templateId,
+            DateTimeOffset? fromUtc,
+            DateTimeOffset? toUtc,
+            CancellationToken ct
+        )
+        {
+            return [
+                .. (
+                    await db
+                        .Readings.Include(x => x.Template)
+                        .AsNoTracking()
+                        .Where(x =>
+                            x.UserId == userId
+                            && x.DeletedUtc == null
+                            && (!templateId.HasValue || x.TemplateId == templateId)
+                            && (!fromUtc.HasValue || x.RecordedAtUtc >= fromUtc)
+                            && (!toUtc.HasValue || x.RecordedAtUtc <= toUtc)
+                        )
+                        .OrderByDescending(x => x.RecordedAtUtc)
+                        .ToArrayAsync(ct)
+                ).Select(x => x.ToDomain()),
+            ];
+        }
+
+        public async Task UpdateReadingAsync(HealthReading reading, CancellationToken ct)
+        {
+            var record = await db.Readings.SingleAsync(
+                x => x.Id == reading.Id && x.UserId == reading.UserId,
+                ct
+            );
+            reading.Apply(record);
+        }
+
+        public async Task<int> PurgeSoftDeletedAsync(DateTimeOffset beforeUtc, CancellationToken ct)
+        {
+            // DateTimeOffset ordering is not translated by every EF provider (including SQLite).
+            // Filtering the already-soft-deleted sets in memory keeps this adapter portable.
+            var readings = (await db.Readings.Where(x => x.DeletedUtc != null).ToListAsync(ct))
+                .Where(x => x.DeletedUtc < beforeUtc)
+                .ToArray();
+            var trackings = (await db.TrackedTemplates.Where(x => x.DeletedUtc != null).ToListAsync(ct))
+                .Where(x => x.DeletedUtc < beforeUtc)
+                .ToArray();
+            var templates = (
+                await db
+                    .Templates.Where(x => x.OwnerUserId != null && x.DeletedUtc != null)
+                    .ToListAsync(ct)
+            )
+                .Where(x => x.DeletedUtc < beforeUtc)
+                .ToArray();
+            db.Readings.RemoveRange(readings);
+            db.TrackedTemplates.RemoveRange(trackings);
+            db.Templates.RemoveRange(templates);
+            await db.SaveChangesAsync(ct);
+            return readings.Length + trackings.Length + templates.Length;
+        }
+
+        public Task SaveChangesAsync(CancellationToken ct)
+        {
+            return db.SaveChangesAsync(ct);
+        }
+    }
+}
