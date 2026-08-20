@@ -1,6 +1,12 @@
 # HealthPulse
 
-A .NET 10 Blazor Web App and controller-based REST API for personal health readings. HealthPulse uses hexagonal architecture, EF Core with SQLite as the first adapter, generic OpenID Connect authentication, and MudBlazor for the UI shell.
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+
+HealthPulse is an open-source .NET 10 Blazor Web App and controller-based REST API for recording and visualising personal health readings. It uses hexagonal architecture, EF Core with SQLite as the first adapter, generic OpenID Connect authentication, and MudBlazor for the UI.
+
+Repository: <https://github.com/dashwort/healthpulse>
+
+This project is provided for personal tracking and software development purposes. It does not provide medical interpretation, diagnosis, or treatment advice.
 
 ## Structure
 
@@ -11,21 +17,34 @@ A .NET 10 Blazor Web App and controller-based REST API for personal health readi
 
 Every data-store operation is user-scoped using the trusted OIDC subject. Controllers never accept a user ID, so one user cannot request another user's templates or readings.
 
-## Configure authentication
+## Getting started
 
-Configure `src/HealthTracker.Web/settings.json` (or a non-committed `settings.Development.json`) with your provider's authority, client ID, client secret, callback path, and scopes. For example, Google uses `https://accounts.google.com` as its authority and normally needs `https://localhost:7204/signin-oidc` registered as an authorised redirect URI.
+### Prerequisites
 
-Do not commit a real client secret. In deployed environments, use the equivalent environment variable, for example `Authentication__OpenIdConnect__ClientSecret`. When the app is run in Development with no authority configured, it uses a local development identity only; this fallback cannot activate in production.
+- .NET SDK 10.0 or later
+- An OpenID Connect provider for non-development deployments
 
-## Run and migrate
+Clone the public repository and run the web project:
 
 ```powershell
+git clone https://github.com/dashwort/healthpulse.git
+cd healthpulse
 dotnet run --project src/HealthTracker.Web
 ```
 
-Migrations are applied automatically at startup and built-in templates are seeded. SQLite is the configured adapter; changing provider belongs only in the Infrastructure composition root and EF migration workflow. The application keeps encryption keys in `src/HealthTracker.Web/App_Data/DataProtectionKeys`; deploy this as durable protected storage so sign-in cookies survive restarts.
+The application applies pending EF Core migrations automatically at startup and seeds the built-in measurement catalogue.
 
-The EF Core 10 tool (`dotnet-ef` 10.0.11) is installed for the current user. Create future migrations with:
+### Configure authentication
+
+Configure the OpenID Connect settings supplied to the web application with your provider's authority, client ID, client secret, callback path, and scopes. For local development, copy `src/HealthTracker.Web/settings.Development.json.example` to an untracked `settings.Development.json`. For example, Google uses `https://accounts.google.com` as its authority.
+
+Never commit a real client secret. In CI/CD or hosted environments, use secret storage or environment variables such as `Authentication__OpenIdConnect__ClientSecret`. When running in Development with no authority configured, the app uses a local development identity; this fallback is disabled outside Development.
+
+### Database and deployment
+
+SQLite is the default adapter and stores data in the configured application data directory. The persistence boundary is database-agnostic; provider changes belong in the Infrastructure composition root and migration workflow. In hosted deployments, persist the ASP.NET Core data-protection keys on durable protected storage so authentication cookies survive restarts.
+
+Create future migrations with the EF Core 10 tool:
 
 ```powershell
 dotnet ef migrations add <Name> --project src/HealthTracker.Infrastructure --startup-project src/HealthTracker.Web --context HealthTrackerDbContext --output-dir Persistence/Migrations
@@ -44,7 +63,7 @@ Built-in templates include urate, glucose, HbA1c, lipid measurements, ketones, w
 
 Deletes are soft deletes. A background worker permanently removes soft-deleted records after 60 days. This app records measurements only; it does not provide medical interpretation or advice.
 
-## Verify
+## Verify locally
 
 ```powershell
 dotnet build HealthTracker.slnx
