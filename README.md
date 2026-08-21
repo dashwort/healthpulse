@@ -69,7 +69,11 @@ All endpoints require authentication.
 
 ## MCP access
 
-Each user can create up to five personal access tokens from **Access tokens**. Tokens expire after one year, are shown once, and can be revoked immediately by their owner or an administrator. Configure Codex or VS Code with the public HTTPS Streamable HTTP endpoint `https://your-host/mcp` and an `Authorization: Bearer <token>` header. MCP requests inherit the token owner's current role and access is immediately denied for revoked tokens or archived users. The endpoint is rate limited per token and records one year of metadata-only audit history; health values and tool arguments are never logged.
+Each user can create up to five personal access tokens from **Access tokens**. Tokens expire after one year, are shown once, and can be revoked immediately by their owner or an administrator. Never share a token in chat, source control, or logs.
+
+Configure Codex or VS Code with the public HTTPS Streamable HTTP endpoint `https://your-host/mcp` and an `Authorization: Bearer <token>` header. MCP requests inherit the token owner's current role and access is immediately denied for revoked tokens or archived users. Members can manage only their own health data; administrator tokens can also manage users and revoke tokens.
+
+The endpoint allows 60 calls per minute and 1,000 calls per token per day, returning HTTP `429` when a limit is reached. It retains one year of metadata-only audit history (token/user identifiers, method, outcome, and timestamp); health values, request arguments, and token secrets are never logged. JSON import is additive and validated transactionally before data is saved.
 
 - `GET /api/templates/catalogue` and `GET /api/templates/tracked`
 - `POST /api/templates/{templateId}/track`, `DELETE /api/templates/{templateId}/track`

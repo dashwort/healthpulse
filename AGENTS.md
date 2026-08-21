@@ -57,6 +57,9 @@ The internal project and namespace names retain `HealthTracker`; `HealthPulse` i
 - Production authentication uses generic OpenID Connect configured through the web application's configuration binding.
 - HealthPulse is invitation-only: `AccessControl__InitialAdministratorEmail` seeds the first admin when the allow-list is empty. Only active, verified Google emails may access the app; admins manage the allow-list and the final active admin cannot be removed or demoted.
 - Personal access tokens are user-scoped credentials for the HTTPS `/mcp` Streamable HTTP endpoint. Store only token hashes, never log tokens or health-data arguments, and preserve immediate revocation when users or tokens are archived/revoked.
+- Tokens expire after one year and each user may have at most five active tokens. Administrators can revoke any user's token but must never be able to recover or view its secret.
+- MCP requests inherit the token owner's current role. Members are limited to their own health data; administrator tokens may manage users and tokens. Enforce both limits on every request: 60 calls per minute in process and 1,000 calls per token/day from persisted audit history; return HTTP 429 when a limit is exceeded.
+- MCP audit records retain only token/user IDs, method name, timestamp, and outcome for one year. Never store request bodies, arguments, token values, or health data. Keep JSON imports additive, fully validate them before persistence, restore needed template tracking, and persist them transactionally.
 - Development may use the local development authentication handler when no OIDC authority is configured; this fallback must not be enabled outside Development.
 - Do not add provider-specific secrets to tracked JSON files. Document required configuration keys and use environment variables or deployment secret storage.
 
@@ -65,6 +68,7 @@ The internal project and namespace names retain `HealthTracker`; `HealthPulse` i
 - Migrations live under `src/HealthTracker.Infrastructure/Persistence/Migrations`.
 - Startup applies pending migrations automatically and seeds missing built-in templates.
 - When changing the persistence model, update the domain/application mappings, add an EF migration, and verify the model snapshot. Do not edit an old migration that may already have been deployed.
+- SQLite does not translate all `DateTimeOffset` comparisons. For queries that must compare persisted UTC timestamps with the current time, load the narrowly scoped records first and apply the comparison in memory, as done by the soft-deletion and active-token paths.
 - Generate a migration with:
 
   ```powershell
