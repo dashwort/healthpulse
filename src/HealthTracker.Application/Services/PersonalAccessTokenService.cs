@@ -9,6 +9,7 @@ namespace HealthTracker.Application.Services
 {
     public sealed class PersonalAccessTokenService(IHealthDataStore dataStore, ICurrentUser currentUser)
     {
+        private static readonly SemaphoreSlim TokenCreationLock = new(1, 1);
         public async Task<IReadOnlyCollection<PersonalAccessTokenDto>> GetTokensAsync(CancellationToken ct)
         {
             var user = await RequireCurrentAllowedUserAsync(ct);
@@ -22,23 +23,34 @@ namespace HealthTracker.Application.Services
             {
                 throw new InvalidOperationException("A token name within 100 characters is required.");
             }
-            if (await dataStore.CountActiveTokensAsync(user.Id, ct) >= 5)
+            await TokenCreationLock.WaitAsync(ct);
+            try
             {
-                throw new InvalidOperationException("A user can have at most five active access tokens.");
-            }
+                return await dataStore.ExecuteInTransactionAsync(async () =>
+                {
+                    if (await dataStore.CountActiveTokensAsync(user.Id, ct) >= 5)
+                    {
+                        throw new InvalidOperationException("A user can have at most five active access tokens.");
+                    }
 
-            var secret = $"hp_{Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant()}";
-            var token = new PersonalAccessToken
+                    var secret = $"hp_{Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant()}";
+                    var token = new PersonalAccessToken
+                    {
+                        AllowedUserId = user.Id,
+                        Name = name.Trim(),
+                        Prefix = secret[..11],
+                        Hash = Hash(secret),
+                        ExpiresUtc = DateTimeOffset.UtcNow.AddYears(1),
+                    };
+                    await dataStore.AddTokenAsync(token, ct);
+                    await dataStore.SaveChangesAsync(ct);
+                    return new CreatedPersonalAccessTokenDto(ToDto(token), secret);
+                }, ct);
+            }
+            finally
             {
-                AllowedUserId = user.Id,
-                Name = name.Trim(),
-                Prefix = secret[..11],
-                Hash = Hash(secret),
-                ExpiresUtc = DateTimeOffset.UtcNow.AddYears(1),
-            };
-            await dataStore.AddTokenAsync(token, ct);
-            await dataStore.SaveChangesAsync(ct);
-            return new(ToDto(token), secret);
+                TokenCreationLock.Release();
+            }
         }
 
         public async Task<IReadOnlyCollection<PersonalAccessTokenDto>> GetTokensForUserAsync(Guid allowedUserId, CancellationToken ct)

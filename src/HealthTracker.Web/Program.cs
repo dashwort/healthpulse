@@ -9,16 +9,14 @@ using HealthTracker.Web.Components;
 using HealthTracker.Web.Configuration;
 using HealthTracker.Web.Services;
 
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 
 using MudBlazor.Services;
-using ModelContextProtocol.Server;
-using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -43,15 +41,6 @@ var oidc =
     ?? new ExternalOidcSettings();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddControllers();
-builder.Services.AddRateLimiter(options =>
-{
-    options.OnRejected = async (context, ct) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        await context.HttpContext.Response.WriteAsync("MCP token rate limit exceeded.", ct);
-    };
-    options.AddPolicy("Mcp", context => RateLimitPartition.GetTokenBucketLimiter(context.Request.Headers.Authorization.ToString(), _ => new TokenBucketRateLimiterOptions { TokenLimit = 60, TokensPerPeriod = 60, ReplenishmentPeriod = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
-});
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
     .WithTools<HealthTracker.Web.Mcp.HealthPulseMcpTools>();
@@ -187,7 +176,6 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<HealthTracker.Web.Mcp.McpAuditAndDailyLimitMiddleware>();
@@ -228,6 +216,6 @@ else
 }
 app.MapStaticAssets();
 app.MapControllers();
-app.MapMcp("/mcp").RequireRateLimiting("Mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = "PersonalAccessToken" });
+app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = "PersonalAccessToken" });
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();

@@ -47,22 +47,83 @@ namespace HealthTracker.Web.Mcp
         [McpServerTool, Description("Additively imports HealthPulse JSON previously produced by export_json. Existing records are never overwritten.")]
         public async Task<string> ImportJson(string json, CancellationToken ct)
         {
-            using var document = JsonDocument.Parse(json);
-            var map = new Dictionary<Guid, Guid>(); var templatesImported = 0; var readingsImported = 0;
-            if (document.RootElement.TryGetProperty("templates", out var templates)) foreach (var source in templates.EnumerateArray())
+            var import = ParseImport(json);
+            return await tracker.ExecuteInTransactionAsync(async () =>
             {
-                if (!source.TryGetProperty("isCustom", out var custom) || !custom.GetBoolean()) continue;
-                var created = await tracker.CreateCustomTemplateAsync(new CreateCustomTemplateDto(source.GetProperty("name").GetString() ?? string.Empty, source.GetProperty("category").GetString() ?? string.Empty, source.GetProperty("normalizedUnit").GetString() ?? string.Empty), ct);
-                if (source.TryGetProperty("id", out var oldId) && oldId.TryGetGuid(out var parsed)) map[parsed] = created.Id;
-                templatesImported++;
-            }
-            if (document.RootElement.TryGetProperty("readings", out var readings)) foreach (var source in readings.EnumerateArray())
-            {
-                var sourceId = source.GetProperty("templateId").GetGuid(); var templateId = map.TryGetValue(sourceId, out var mapped) ? mapped : sourceId;
-                await tracker.CreateReadingAsync(new CreateReadingDto(templateId, source.GetProperty("value").GetDecimal(), source.GetProperty("unit").GetString() ?? string.Empty, source.GetProperty("recordedAtUtc").GetDateTimeOffset(), source.TryGetProperty("note", out var note) && note.ValueKind != JsonValueKind.Null ? note.GetString() : null), ct); readingsImported++;
-            }
-            return $"Imported {templatesImported} custom templates and {readingsImported} readings.";
+                var templateIds = new Dictionary<Guid, Guid>();
+                foreach (var template in import.Templates)
+                {
+                    if (!template.IsCustom)
+                    {
+                        continue;
+                    }
+
+                    var created = await tracker.CreateCustomTemplateAsync(
+                        new CreateCustomTemplateDto(template.Name, template.Category, template.NormalizedUnit), ct);
+                    templateIds[template.Id] = created.Id;
+                }
+
+                var catalogue = await tracker.GetCatalogueAsync(ct);
+                var imported = 0;
+                foreach (var reading in import.Readings)
+                {
+                    var templateId = templateIds.GetValueOrDefault(reading.TemplateId, reading.TemplateId);
+                    var template = catalogue.SingleOrDefault(x => x.Id == templateId)
+                        ?? throw new InvalidOperationException("An imported reading references an unavailable template.");
+                    if (!template.IsTracked)
+                    {
+                        await tracker.TrackTemplateAsync(templateId, ct);
+                    }
+
+                    await tracker.CreateReadingAsync(
+                        new CreateReadingDto(templateId, reading.Value, reading.Unit, reading.RecordedAtUtc, reading.Note), ct);
+                    imported++;
+                }
+
+                return $"Imported {templateIds.Count} custom templates and {imported} readings.";
+            }, ct);
         }
+
+        private static ImportDocument ParseImport(string json)
+        {
+            try
+            {
+                var document = JsonSerializer.Deserialize<ImportDocument>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                });
+                if (document?.Templates is null || document.Readings is null)
+                {
+                    throw new InvalidOperationException("Import JSON must contain templates and readings arrays.");
+                }
+
+                foreach (var template in document.Templates)
+                {
+                    if (template.Id == Guid.Empty || string.IsNullOrWhiteSpace(template.Name) || string.IsNullOrWhiteSpace(template.Category) || string.IsNullOrWhiteSpace(template.NormalizedUnit))
+                    {
+                        throw new InvalidOperationException("Import JSON contains an invalid template.");
+                    }
+                }
+
+                foreach (var reading in document.Readings)
+                {
+                    if (reading.TemplateId == Guid.Empty || string.IsNullOrWhiteSpace(reading.Unit))
+                    {
+                        throw new InvalidOperationException("Import JSON contains an invalid reading.");
+                    }
+                }
+
+                return document;
+            }
+            catch (JsonException exception)
+            {
+                throw new InvalidOperationException("Import JSON is invalid.", exception);
+            }
+        }
+
+        private sealed record ImportDocument(IReadOnlyCollection<ImportedTemplate> Templates, IReadOnlyCollection<ImportedReading> Readings);
+        private sealed record ImportedTemplate(Guid Id, string Name, string Category, string NormalizedUnit, bool IsCustom);
+        private sealed record ImportedReading(Guid TemplateId, decimal Value, string Unit, DateTimeOffset RecordedAtUtc, string? Note);
 
         [McpServerTool, Description("Administrators only: lists approved users.")]
         public Task<IReadOnlyCollection<AllowedUserDto>> ListUsers(bool includeArchived, CancellationToken ct) => tracker.GetAllowedUsersAsync(includeArchived, ct);

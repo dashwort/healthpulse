@@ -7,6 +7,10 @@ namespace HealthTracker.Application.Services
 {
     public sealed class HealthTrackerService(IHealthDataStore dataStore, ICurrentUser currentUser)
     {
+        public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct)
+        {
+            return dataStore.ExecuteInTransactionAsync(operation, ct);
+        }
         public async Task<IReadOnlyCollection<AllowedUserDto>> GetAllowedUsersAsync(
             bool includeArchived,
             CancellationToken ct
@@ -377,9 +381,12 @@ namespace HealthTracker.Application.Services
                     DisplayName = currentUser.DisplayName,
                 };
                 await dataStore.AddUserAsync(user, ct);
-                allowedUser.ApplicationUserId = user.Id;
-                allowedUser.FirstSignedInUtc ??= DateTimeOffset.UtcNow;
             }
+
+            // Approved people can have signed in before the allow-list feature existed.
+            // Always link the current subject, rather than only linking newly-created users.
+            allowedUser.ApplicationUserId = user.Id;
+            allowedUser.FirstSignedInUtc ??= DateTimeOffset.UtcNow;
 
             allowedUser.LastSignedInUtc = DateTimeOffset.UtcNow;
             await dataStore.UpdateAllowedUserAsync(allowedUser, ct);

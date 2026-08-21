@@ -3,7 +3,6 @@ using System.Text.Encodings.Web;
 
 using HealthTracker.Application.Abstractions;
 using HealthTracker.Application.Services;
-using HealthTracker.Domain.Models;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
@@ -31,7 +30,7 @@ namespace HealthTracker.Web.Authentication
             );
             var user = token is null
                 ? null
-                : (await dataStore.GetAllowedUsersAsync(false, Context.RequestAborted)).SingleOrDefault(x => x.Id == token.AllowedUserId);
+                : await dataStore.FindAllowedUserByIdAsync(token.AllowedUserId, false, Context.RequestAborted);
             if (token is null || user is null)
             {
                 return AuthenticateResult.Fail("Invalid access token.");

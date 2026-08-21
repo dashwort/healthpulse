@@ -205,6 +205,18 @@ namespace HealthTracker.Infrastructure.Persistence
             return [.. (await query.OrderBy(x => x.Email).ToArrayAsync(ct)).Select(x => x.ToDomain())];
         }
 
+        public async Task<AllowedUser?> FindAllowedUserByIdAsync(
+            Guid allowedUserId,
+            bool includeDeleted,
+            CancellationToken ct
+        )
+        {
+            return (await db.AllowedUsers.SingleOrDefaultAsync(
+                x => x.Id == allowedUserId && (includeDeleted || x.DeletedUtc == null),
+                ct
+            ))?.ToDomain();
+        }
+
         public Task<int> CountActiveAdministratorsAsync(CancellationToken ct)
         {
             return db.AllowedUsers.CountAsync(
@@ -328,6 +340,22 @@ namespace HealthTracker.Infrastructure.Persistence
         public Task SaveChangesAsync(CancellationToken ct)
         {
             return db.SaveChangesAsync(ct);
+        }
+
+        public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct)
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                var result = await operation();
+                await transaction.CommitAsync(ct);
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
         }
     }
 }

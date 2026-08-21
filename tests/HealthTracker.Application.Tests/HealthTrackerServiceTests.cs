@@ -167,6 +167,39 @@ namespace HealthTracker.Application.Tests
             );
         }
 
+        [Fact]
+        public async Task Personal_access_tokens_are_hashed_expire_in_one_year_and_can_be_revoked()
+        {
+            var store = new FakeStore();
+            var service = new PersonalAccessTokenService(store, new FakeCurrentUser());
+
+            var created = await service.CreateTokenAsync("Codex", CancellationToken.None);
+            var tokens = await service.GetTokensAsync(CancellationToken.None);
+
+            Assert.StartsWith("hp_", created.Secret);
+            Assert.NotEqual(created.Secret, store.Tokens.Single().Hash);
+            Assert.Equal(PersonalAccessTokenService.Hash(created.Secret), store.Tokens.Single().Hash);
+            Assert.InRange(created.Token.ExpiresUtc, DateTimeOffset.UtcNow.AddYears(1).AddMinutes(-1), DateTimeOffset.UtcNow.AddYears(1).AddMinutes(1));
+            Assert.Single(tokens);
+
+            await service.RevokeTokenAsync(created.Token.Id, null, CancellationToken.None);
+            Assert.True(store.Tokens.Single().RevokedUtc.HasValue);
+        }
+
+        [Fact]
+        public async Task Personal_access_tokens_enforce_the_five_token_limit()
+        {
+            var store = new FakeStore();
+            var service = new PersonalAccessTokenService(store, new FakeCurrentUser());
+            for (var index = 0; index < 5; index++)
+            {
+                await service.CreateTokenAsync($"Token {index}", CancellationToken.None);
+            }
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.CreateTokenAsync("Too many", CancellationToken.None));
+        }
+
         private sealed class FakeCurrentUser : ICurrentUser
         {
             public string Subject => "test-user";
@@ -188,7 +221,10 @@ namespace HealthTracker.Application.Tests
             public List<MeasurementTemplate> Templates { get; } = [];
             public List<UserTrackedTemplate> Trackings { get; } = [];
             public List<HealthReading> Readings { get; } = [];
-            public List<AllowedUser> AllowedUsers { get; } =
+            public List<AllowedUser> AllowedUsers
+            {
+                get;
+            } =
             [
                 new()
                 {
@@ -198,6 +234,7 @@ namespace HealthTracker.Application.Tests
                 },
             ];
             public List<ApplicationUser> Users { get; } = [];
+            public List<PersonalAccessToken> Tokens { get; } = [];
 
             public Task<ApplicationUser?> FindUserBySubjectAsync(
                 string subject,
@@ -350,6 +387,11 @@ namespace HealthTracker.Application.Tests
                 );
             }
 
+            public Task<AllowedUser?> FindAllowedUserByIdAsync(Guid allowedUserId, bool includeDeleted, CancellationToken ct)
+            {
+                return Task.FromResult(AllowedUsers.SingleOrDefault(x => x.Id == allowedUserId && (includeDeleted || x.DeletedUtc is null)));
+            }
+
             public Task<int> CountActiveAdministratorsAsync(CancellationToken ct)
             {
                 return Task.FromResult(
@@ -370,10 +412,14 @@ namespace HealthTracker.Application.Tests
                 return Task.CompletedTask;
             }
 
-            public Task<int> CountActiveTokensAsync(Guid allowedUserId, CancellationToken ct) => Task.FromResult(0);
-            public Task<PersonalAccessToken?> FindActiveTokenByHashAsync(string hash, CancellationToken ct) => Task.FromResult<PersonalAccessToken?>(null);
-            public Task<IReadOnlyCollection<PersonalAccessToken>> GetTokensAsync(Guid allowedUserId, CancellationToken ct) => Task.FromResult<IReadOnlyCollection<PersonalAccessToken>>([]);
-            public Task AddTokenAsync(PersonalAccessToken token, CancellationToken ct) => Task.CompletedTask;
+            public Task<int> CountActiveTokensAsync(Guid allowedUserId, CancellationToken ct) => Task.FromResult(Tokens.Count(x => x.AllowedUserId == allowedUserId && x.RevokedUtc is null && x.ExpiresUtc > DateTimeOffset.UtcNow));
+            public Task<PersonalAccessToken?> FindActiveTokenByHashAsync(string hash, CancellationToken ct) => Task.FromResult<PersonalAccessToken?>(Tokens.SingleOrDefault(x => x.Hash == hash && x.RevokedUtc is null && x.ExpiresUtc > DateTimeOffset.UtcNow));
+            public Task<IReadOnlyCollection<PersonalAccessToken>> GetTokensAsync(Guid allowedUserId, CancellationToken ct) => Task.FromResult<IReadOnlyCollection<PersonalAccessToken>>([.. Tokens.Where(x => x.AllowedUserId == allowedUserId)]);
+            public Task AddTokenAsync(PersonalAccessToken token, CancellationToken ct)
+            {
+                Tokens.Add(token);
+                return Task.CompletedTask;
+            }
             public Task UpdateTokenAsync(PersonalAccessToken token, CancellationToken ct) => Task.CompletedTask;
             public Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct) => Task.CompletedTask;
             public Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken ct) => Task.FromResult(0);
@@ -419,6 +465,11 @@ namespace HealthTracker.Application.Tests
             public Task SaveChangesAsync(CancellationToken ct)
             {
                 return Task.CompletedTask;
+            }
+
+            public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct)
+            {
+                return operation();
             }
         }
     }

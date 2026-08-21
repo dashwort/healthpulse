@@ -14,6 +14,11 @@ namespace HealthTracker.Application.Abstractions
             bool includeDeleted,
             CancellationToken cancellationToken
         );
+        Task<AllowedUser?> FindAllowedUserByIdAsync(
+            Guid allowedUserId,
+            bool includeDeleted,
+            CancellationToken cancellationToken
+        );
         Task<ApplicationUser?> FindUserByIdAsync(Guid userId, CancellationToken cancellationToken);
         Task<IReadOnlyCollection<AllowedUser>> GetAllowedUsersAsync(
             bool includeDeleted,
@@ -80,5 +85,6 @@ namespace HealthTracker.Application.Abstractions
         Task UpdateReadingAsync(HealthReading reading, CancellationToken cancellationToken);
         Task<int> PurgeSoftDeletedAsync(DateTimeOffset beforeUtc, CancellationToken cancellationToken);
         Task SaveChangesAsync(CancellationToken cancellationToken);
+        Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken);
     }
 }
