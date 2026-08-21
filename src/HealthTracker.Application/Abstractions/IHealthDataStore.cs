@@ -14,6 +14,7 @@ namespace HealthTracker.Application.Abstractions
             bool includeDeleted,
             CancellationToken cancellationToken
         );
+        Task<ApplicationUser?> FindUserByIdAsync(Guid userId, CancellationToken cancellationToken);
         Task<IReadOnlyCollection<AllowedUser>> GetAllowedUsersAsync(
             bool includeDeleted,
             CancellationToken cancellationToken
@@ -21,6 +22,14 @@ namespace HealthTracker.Application.Abstractions
         Task<int> CountActiveAdministratorsAsync(CancellationToken cancellationToken);
         Task AddAllowedUserAsync(AllowedUser user, CancellationToken cancellationToken);
         Task UpdateAllowedUserAsync(AllowedUser user, CancellationToken cancellationToken);
+        Task<int> CountActiveTokensAsync(Guid allowedUserId, CancellationToken cancellationToken);
+        Task<PersonalAccessToken?> FindActiveTokenByHashAsync(string hash, CancellationToken cancellationToken);
+        Task<IReadOnlyCollection<PersonalAccessToken>> GetTokensAsync(Guid allowedUserId, CancellationToken cancellationToken);
+        Task AddTokenAsync(PersonalAccessToken token, CancellationToken cancellationToken);
+        Task UpdateTokenAsync(PersonalAccessToken token, CancellationToken cancellationToken);
+        Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken cancellationToken);
+        Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken cancellationToken);
+        Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken cancellationToken);
         Task<IReadOnlyCollection<MeasurementTemplate>> GetCatalogueAsync(
             Guid userId,
             CancellationToken cancellationToken

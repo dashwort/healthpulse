@@ -56,6 +56,7 @@ The internal project and namespace names retain `HealthTracker`; `HealthPulse` i
 
 - Production authentication uses generic OpenID Connect configured through the web application's configuration binding.
 - HealthPulse is invitation-only: `AccessControl__InitialAdministratorEmail` seeds the first admin when the allow-list is empty. Only active, verified Google emails may access the app; admins manage the allow-list and the final active admin cannot be removed or demoted.
+- Personal access tokens are user-scoped credentials for the HTTPS `/mcp` Streamable HTTP endpoint. Store only token hashes, never log tokens or health-data arguments, and preserve immediate revocation when users or tokens are archived/revoked.
 - Development may use the local development authentication handler when no OIDC authority is configured; this fallback must not be enabled outside Development.
 - Do not add provider-specific secrets to tracked JSON files. Document required configuration keys and use environment variables or deployment secret storage.
 

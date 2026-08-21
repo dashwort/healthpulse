@@ -197,6 +197,7 @@ namespace HealthTracker.Application.Tests
                     Role = AllowedUserRole.Admin,
                 },
             ];
+            public List<ApplicationUser> Users { get; } = [];
 
             public Task<ApplicationUser?> FindUserBySubjectAsync(
                 string subject,
@@ -208,6 +209,7 @@ namespace HealthTracker.Application.Tests
 
             public Task AddUserAsync(ApplicationUser user, CancellationToken ct)
             {
+                Users.Add(user);
                 return Task.CompletedTask;
             }
 
@@ -322,6 +324,8 @@ namespace HealthTracker.Application.Tests
                 ]);
             }
 
+            public Task<ApplicationUser?> FindUserByIdAsync(Guid userId, CancellationToken ct) => Task.FromResult(Users.SingleOrDefault(x => x.Id == userId));
+
             public Task<AllowedUser?> FindAllowedUserByEmailAsync(
                 string normalizedEmail,
                 bool includeDeleted,
@@ -365,6 +369,15 @@ namespace HealthTracker.Application.Tests
             {
                 return Task.CompletedTask;
             }
+
+            public Task<int> CountActiveTokensAsync(Guid allowedUserId, CancellationToken ct) => Task.FromResult(0);
+            public Task<PersonalAccessToken?> FindActiveTokenByHashAsync(string hash, CancellationToken ct) => Task.FromResult<PersonalAccessToken?>(null);
+            public Task<IReadOnlyCollection<PersonalAccessToken>> GetTokensAsync(Guid allowedUserId, CancellationToken ct) => Task.FromResult<IReadOnlyCollection<PersonalAccessToken>>([]);
+            public Task AddTokenAsync(PersonalAccessToken token, CancellationToken ct) => Task.CompletedTask;
+            public Task UpdateTokenAsync(PersonalAccessToken token, CancellationToken ct) => Task.CompletedTask;
+            public Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct) => Task.CompletedTask;
+            public Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken ct) => Task.FromResult(0);
+            public Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken ct) => Task.FromResult(0);
 
             public Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(
                 Guid userId,

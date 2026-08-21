@@ -17,6 +17,8 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 
 using MudBlazor.Services;
+using ModelContextProtocol.Server;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -41,10 +43,23 @@ var oidc =
     ?? new ExternalOidcSettings();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddControllers();
+builder.Services.AddRateLimiter(options =>
+{
+    options.OnRejected = async (context, ct) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        await context.HttpContext.Response.WriteAsync("MCP token rate limit exceeded.", ct);
+    };
+    options.AddPolicy("Mcp", context => RateLimitPartition.GetTokenBucketLimiter(context.Request.Headers.Authorization.ToString(), _ => new TokenBucketRateLimiterOptions { TokenLimit = 60, TokensPerPeriod = 60, ReplenishmentPeriod = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true }));
+});
+builder.Services.AddMcpServer()
+    .WithHttpTransport(options => options.Stateless = true)
+    .WithTools<HealthTracker.Web.Mcp.HealthPulseMcpTools>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 builder.Services.AddScoped<AccessControlAuthorizationHandler>();
 builder.Services.AddScoped<HealthTrackerService>();
+builder.Services.AddScoped<PersonalAccessTokenService>();
 builder.Services.AddMudServices();
 builder.Services.AddHostedService<SoftDeletionPurgeService>();
 builder.Services.AddApexCharts();
@@ -152,6 +167,8 @@ builder.Services.AddAuthorization(options =>
                 .AddRequirements(new ActiveAllowedUserRequirement(), new AdministratorRequirement())
     );
 });
+builder.Services.AddAuthentication()
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, PersonalAccessTokenAuthenticationHandler>("PersonalAccessToken", _ => { });
 builder.Services.AddScoped<IAuthorizationHandler>(
     serviceProvider => serviceProvider.GetRequiredService<AccessControlAuthorizationHandler>()
 );
@@ -170,8 +187,10 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<HealthTracker.Web.Mcp.McpAuditAndDailyLimitMiddleware>();
 app.UseAntiforgery();
 if (usesDevelopmentAuthentication)
 {
@@ -209,5 +228,6 @@ else
 }
 app.MapStaticAssets();
 app.MapControllers();
+app.MapMcp("/mcp").RequireRateLimiting("Mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = "PersonalAccessToken" });
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();

@@ -1,6 +1,7 @@
 @page "/users"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Administrator")]
 @inject HealthTrackerService Tracker
+@inject PersonalAccessTokenService TokenService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -36,7 +37,7 @@ else
 {
     <MudTable Items="users" Dense="true" Hover="true">
         <HeaderContent>
-            <MudTh>Email</MudTh><MudTh>Role</MudTh><MudTh>Status</MudTh><MudTh>First sign-in</MudTh><MudTh>Last sign-in</MudTh><MudTh></MudTh>
+            <MudTh>Email</MudTh><MudTh>Role</MudTh><MudTh>Status</MudTh><MudTh>First sign-in</MudTh><MudTh>Last sign-in</MudTh><MudTh>Access tokens</MudTh><MudTh></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Email">@context.Email</MudTd>
@@ -56,6 +57,15 @@ else
             <MudTd DataLabel="Status"><MudChip T="string" Size="MudBlazor.Size.Small" Color="@StatusColor(context)">@Status(context)</MudChip></MudTd>
             <MudTd DataLabel="First sign-in">@FormatDate(context.FirstSignedInUtc)</MudTd>
             <MudTd DataLabel="Last sign-in">@FormatDate(context.LastSignedInUtc)</MudTd>
+            <MudTd DataLabel="Access tokens">
+                @if (userTokens.TryGetValue(context.Id, out var tokens))
+                {
+                    @foreach (var token in tokens.Where(x => !x.IsRevoked))
+                    {
+                        <MudChip T="string" Size="MudBlazor.Size.Small" Class="mr-1">@token.Name <MudIconButton Size="MudBlazor.Size.Small" Icon="@Icons.Material.Filled.Block" aria-label="Revoke token" OnClick="() => RevokeTokenAsync(context.Id, token.Id)" /></MudChip>
+                    }
+                }
+            </MudTd>
             <MudTd>
                 @if (context.IsArchived)
                 {
@@ -75,12 +85,18 @@ else
     private string email = string.Empty;
     private string role = "Member";
     private bool showArchived;
+    private Dictionary<Guid, IReadOnlyCollection<PersonalAccessTokenDto>> userTokens = [];
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
         users = await Tracker.GetAllowedUsersAsync(showArchived, CancellationToken.None);
+        userTokens = [];
+        foreach (var user in users)
+        {
+            userTokens[user.Id] = await TokenService.GetTokensForUserAsync(user.Id, CancellationToken.None);
+        }
     }
 
     private async Task AddAsync()
@@ -150,6 +166,13 @@ else
             CancellationToken.None
         );
         Snackbar.Add("User reactivated.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task RevokeTokenAsync(Guid userId, Guid tokenId)
+    {
+        await TokenService.RevokeTokenAsync(tokenId, userId, CancellationToken.None);
+        Snackbar.Add("Token revoked.", Severity.Success);
         await LoadAsync();
     }
 

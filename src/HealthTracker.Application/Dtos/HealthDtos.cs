@@ -69,4 +69,8 @@ namespace HealthTracker.Application.Dtos
     public sealed record AddAllowedUserDto(string Email, string Role);
 
     public sealed record UpdateAllowedUserRoleDto(string Role);
+
+    public sealed record PersonalAccessTokenDto(Guid Id, string Name, string Prefix, DateTimeOffset ExpiresUtc, DateTimeOffset? LastUsedUtc, bool IsRevoked);
+
+    public sealed record CreatedPersonalAccessTokenDto(PersonalAccessTokenDto Token, string Secret);
 }

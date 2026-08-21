@@ -22,6 +22,7 @@ namespace HealthTracker.Web.Services
             using var scope = scopeFactory.CreateScope();
             var store = scope.ServiceProvider.GetRequiredService<IHealthDataStore>();
             var deleted = await store.PurgeSoftDeletedAsync(DateTimeOffset.UtcNow.AddDays(-60), ct);
+            await store.PurgeMcpAuditLogsAsync(DateTimeOffset.UtcNow.AddYears(-1), ct);
             if (deleted > 0)
             {
                 logger.LogInformation(

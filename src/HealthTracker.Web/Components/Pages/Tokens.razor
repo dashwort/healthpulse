@@ -1,0 +1,12 @@
+@page "/tokens"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject PersonalAccessTokenService TokenService
+@inject ISnackbar Snackbar
+
+<PageTitle>Access tokens · HealthPulse</PageTitle>
+<MudText Typo="Typo.h3" Class="mb-1">Personal access tokens</MudText>
+<MudText Color="MudBlazor.Color.Secondary" Class="mb-4">Tokens grant MCP access as you. Copy a new token now; it will not be shown again.</MudText>
+<MudPaper Class="pa-4 mb-4" Elevation="0"><MudStack Row="true"><MudTextField Label="Token name" @bind-Value="name" /><MudButton Color="MudBlazor.Color.Primary" OnClick="CreateAsync">Create token</MudButton></MudStack>@if (secret is not null) { <MudAlert Severity="Severity.Warning" Class="mt-3"><MudText>Select and copy this token now: <code>@secret</code></MudText></MudAlert> }</MudPaper>
+@if (tokens is null) { <MudProgressCircular Indeterminate="true" /> } else { <MudTable Items="tokens" Dense="true"><HeaderContent><MudTh>Name</MudTh><MudTh>Prefix</MudTh><MudTh>Expires</MudTh><MudTh>Last used</MudTh><MudTh></MudTh></HeaderContent><RowTemplate><MudTd>@context.Name</MudTd><MudTd><code>@context.Prefix…</code></MudTd><MudTd>@context.ExpiresUtc.ToLocalTime().ToString("g")</MudTd><MudTd>@(context.LastUsedUtc?.ToLocalTime().ToString("g") ?? "Never")</MudTd><MudTd>@if (!context.IsRevoked) { <MudButton Color="MudBlazor.Color.Error" Variant="Variant.Text" OnClick="() => RevokeAsync(context.Id)">Revoke</MudButton> } else { <MudText>Revoked</MudText> }</MudTd></RowTemplate></MudTable> }
+
+@code { private IReadOnlyCollection<PersonalAccessTokenDto>? tokens; private string name = string.Empty; private string? secret; protected override async Task OnInitializedAsync() => await LoadAsync(); private async Task LoadAsync() => tokens = await TokenService.GetTokensAsync(CancellationToken.None); private async Task CreateAsync() { try { var result = await TokenService.CreateTokenAsync(name, CancellationToken.None); secret = result.Secret; name = string.Empty; await LoadAsync(); } catch (InvalidOperationException ex) { Snackbar.Add(ex.Message, Severity.Error); } } private async Task RevokeAsync(Guid id) { await TokenService.RevokeTokenAsync(id, null, CancellationToken.None); Snackbar.Add("Token revoked.", Severity.Success); await LoadAsync(); } }

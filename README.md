@@ -67,6 +67,10 @@ dotnet ef migrations add <Name> --project src/HealthTracker.Infrastructure --sta
 
 All endpoints require authentication.
 
+## MCP access
+
+Each user can create up to five personal access tokens from **Access tokens**. Tokens expire after one year, are shown once, and can be revoked immediately by their owner or an administrator. Configure Codex or VS Code with the public HTTPS Streamable HTTP endpoint `https://your-host/mcp` and an `Authorization: Bearer <token>` header. MCP requests inherit the token owner's current role and access is immediately denied for revoked tokens or archived users. The endpoint is rate limited per token and records one year of metadata-only audit history; health values and tool arguments are never logged.
+
 - `GET /api/templates/catalogue` and `GET /api/templates/tracked`
 - `POST /api/templates/{templateId}/track`, `DELETE /api/templates/{templateId}/track`
 - `POST|PUT|DELETE /api/templates/custom/{templateId?}`

@@ -1,6 +1,7 @@
 using HealthTracker.Application.Abstractions;
 using HealthTracker.Domain.Models;
 using HealthTracker.Infrastructure.Persistence.Mappings;
+using HealthTracker.Infrastructure.Persistence.Models;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -173,6 +174,11 @@ namespace HealthTracker.Infrastructure.Persistence
             ];
         }
 
+        public async Task<ApplicationUser?> FindUserByIdAsync(Guid userId, CancellationToken ct)
+        {
+            return (await db.Users.SingleOrDefaultAsync(x => x.Id == userId, ct))?.ToDomain();
+        }
+
         public async Task<AllowedUser?> FindAllowedUserByEmailAsync(
             string normalizedEmail,
             bool includeDeleted,
@@ -216,6 +222,39 @@ namespace HealthTracker.Infrastructure.Persistence
         {
             var record = await db.AllowedUsers.SingleAsync(x => x.Id == user.Id, ct);
             user.Apply(record);
+        }
+
+        public Task<int> CountActiveTokensAsync(Guid allowedUserId, CancellationToken ct) =>
+            db.PersonalAccessTokens.CountAsync(x => x.AllowedUserId == allowedUserId && x.RevokedUtc == null && x.ExpiresUtc > DateTimeOffset.UtcNow, ct);
+
+        public async Task<PersonalAccessToken?> FindActiveTokenByHashAsync(string hash, CancellationToken ct)
+        {
+            var token = await db.PersonalAccessTokens.SingleOrDefaultAsync(x => x.Hash == hash && x.RevokedUtc == null && x.ExpiresUtc > DateTimeOffset.UtcNow, ct);
+            return token is null ? null : new PersonalAccessToken { Id = token.Id, AllowedUserId = token.AllowedUserId, Name = token.Name, Prefix = token.Prefix, Hash = token.Hash, CreatedUtc = token.CreatedUtc, ExpiresUtc = token.ExpiresUtc, LastUsedUtc = token.LastUsedUtc, RevokedUtc = token.RevokedUtc };
+        }
+
+        public async Task<IReadOnlyCollection<PersonalAccessToken>> GetTokensAsync(Guid allowedUserId, CancellationToken ct) =>
+            [.. (await db.PersonalAccessTokens.AsNoTracking().Where(x => x.AllowedUserId == allowedUserId).OrderByDescending(x => x.CreatedUtc).ToArrayAsync(ct)).Select(x => new PersonalAccessToken { Id = x.Id, AllowedUserId = x.AllowedUserId, Name = x.Name, Prefix = x.Prefix, Hash = x.Hash, CreatedUtc = x.CreatedUtc, ExpiresUtc = x.ExpiresUtc, LastUsedUtc = x.LastUsedUtc, RevokedUtc = x.RevokedUtc })];
+
+        public Task AddTokenAsync(PersonalAccessToken token, CancellationToken ct) => db.PersonalAccessTokens.AddAsync(new PersonalAccessTokenRecord { Id = token.Id, AllowedUserId = token.AllowedUserId, Name = token.Name, Prefix = token.Prefix, Hash = token.Hash, CreatedUtc = token.CreatedUtc, ExpiresUtc = token.ExpiresUtc, LastUsedUtc = token.LastUsedUtc, RevokedUtc = token.RevokedUtc }, ct).AsTask();
+
+        public async Task UpdateTokenAsync(PersonalAccessToken token, CancellationToken ct)
+        {
+            var record = await db.PersonalAccessTokens.SingleAsync(x => x.Id == token.Id, ct);
+            record.LastUsedUtc = token.LastUsedUtc;
+            record.RevokedUtc = token.RevokedUtc;
+        }
+
+        public Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct) => db.McpAuditLogs.AddAsync(new McpAuditLogRecord { Id = auditLog.Id, PersonalAccessTokenId = auditLog.PersonalAccessTokenId, AllowedUserId = auditLog.AllowedUserId, Method = auditLog.Method, Outcome = auditLog.Outcome, OccurredUtc = auditLog.OccurredUtc }, ct).AsTask();
+
+        public Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken ct) => db.McpAuditLogs.CountAsync(x => x.PersonalAccessTokenId == tokenId && x.OccurredUtc >= sinceUtc, ct);
+
+        public async Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken ct)
+        {
+            var logs = await db.McpAuditLogs.Where(x => x.OccurredUtc < beforeUtc).ToListAsync(ct);
+            db.McpAuditLogs.RemoveRange(logs);
+            await db.SaveChangesAsync(ct);
+            return logs.Count;
         }
 
         public async Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(

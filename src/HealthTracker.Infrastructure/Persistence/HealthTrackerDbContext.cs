@@ -9,6 +9,8 @@ namespace HealthTracker.Infrastructure.Persistence
     {
         public DbSet<UserRecord> Users => Set<UserRecord>();
         public DbSet<AllowedUserRecord> AllowedUsers => Set<AllowedUserRecord>();
+        public DbSet<PersonalAccessTokenRecord> PersonalAccessTokens => Set<PersonalAccessTokenRecord>();
+        public DbSet<McpAuditLogRecord> McpAuditLogs => Set<McpAuditLogRecord>();
         public DbSet<TemplateRecord> Templates => Set<TemplateRecord>();
         public DbSet<TrackedTemplateRecord> TrackedTemplates => Set<TrackedTemplateRecord>();
         public DbSet<ReadingRecord> Readings => Set<ReadingRecord>();
@@ -56,6 +58,30 @@ namespace HealthTracker.Infrastructure.Persistence
                     v => v.HasValue ? v.Value.UtcTicks : (long?)null,
                     v => v.HasValue ? new DateTimeOffset(v.Value, TimeSpan.Zero) : (DateTimeOffset?)null
                 ).HasColumnType("INTEGER");
+            });
+            modelBuilder.Entity<PersonalAccessTokenRecord>(entity =>
+            {
+                entity.ToTable("PersonalAccessTokens");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+                entity.Property(x => x.Prefix).HasMaxLength(16).IsRequired();
+                entity.Property(x => x.Hash).HasMaxLength(64).IsRequired();
+                entity.HasIndex(x => x.Hash).IsUnique();
+                entity.HasIndex(x => new { x.AllowedUserId, x.RevokedUtc });
+                ConfigureUtc(entity.Property(x => x.CreatedUtc));
+                ConfigureUtc(entity.Property(x => x.ExpiresUtc));
+                ConfigureNullableUtc(entity.Property(x => x.LastUsedUtc));
+                ConfigureNullableUtc(entity.Property(x => x.RevokedUtc));
+            });
+            modelBuilder.Entity<McpAuditLogRecord>(entity =>
+            {
+                entity.ToTable("McpAuditLogs");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Method).HasMaxLength(100).IsRequired();
+                entity.Property(x => x.Outcome).HasMaxLength(20).IsRequired();
+                entity.HasIndex(x => new { x.PersonalAccessTokenId, x.OccurredUtc });
+                entity.HasIndex(x => new { x.AllowedUserId, x.OccurredUtc });
+                ConfigureUtc(entity.Property(x => x.OccurredUtc));
             });
             modelBuilder.Entity<TemplateRecord>(entity =>
             {
@@ -152,6 +178,16 @@ namespace HealthTracker.Infrastructure.Persistence
                     .HasForeignKey(x => x.TemplateId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
+        }
+
+        private static void ConfigureUtc(Microsoft.EntityFrameworkCore.Metadata.Builders.PropertyBuilder<DateTimeOffset> property)
+        {
+            property.HasConversion(v => v.UtcTicks, v => new DateTimeOffset(v, TimeSpan.Zero)).HasColumnType("INTEGER");
+        }
+
+        private static void ConfigureNullableUtc(Microsoft.EntityFrameworkCore.Metadata.Builders.PropertyBuilder<DateTimeOffset?> property)
+        {
+            property.HasConversion(v => v.HasValue ? v.Value.UtcTicks : (long?)null, v => v.HasValue ? new DateTimeOffset(v.Value, TimeSpan.Zero) : (DateTimeOffset?)null).HasColumnType("INTEGER");
         }
     }
 }
