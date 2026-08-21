@@ -236,8 +236,14 @@ namespace HealthTracker.Infrastructure.Persistence
             user.Apply(record);
         }
 
-        public Task<int> CountActiveTokensAsync(Guid allowedUserId, CancellationToken ct) =>
-            db.PersonalAccessTokens.CountAsync(x => x.AllowedUserId == allowedUserId && x.RevokedUtc == null && x.ExpiresUtc > DateTimeOffset.UtcNow, ct);
+        public async Task<int> CountActiveTokensAsync(Guid allowedUserId, CancellationToken ct)
+        {
+            var tokens = await db
+                .PersonalAccessTokens.AsNoTracking()
+                .Where(x => x.AllowedUserId == allowedUserId && x.RevokedUtc == null)
+                .ToArrayAsync(ct);
+            return tokens.Count(x => x.ExpiresUtc > DateTimeOffset.UtcNow);
+        }
 
         public async Task<PersonalAccessToken?> FindActiveTokenByHashAsync(string hash, CancellationToken ct)
         {
