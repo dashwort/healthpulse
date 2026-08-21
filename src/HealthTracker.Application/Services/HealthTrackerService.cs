@@ -7,6 +7,8 @@ namespace HealthTracker.Application.Services
 {
     public sealed class HealthTrackerService(IHealthDataStore dataStore, ICurrentUser currentUser)
     {
+        private static readonly SemaphoreSlim AdministratorMutationLock = new(1, 1);
+
         public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct)
         {
             return dataStore.ExecuteInTransactionAsync(operation, ct);
@@ -59,32 +61,64 @@ namespace HealthTracker.Application.Services
             CancellationToken ct
         )
         {
-            await RequireAdministratorAsync(ct);
-            var allowedUser = await RequireAllowedUserAsync(allowedUserId, ct);
-            var role = ParseRole(request.Role);
-            if (allowedUser.Role == AllowedUserRole.Admin && role != AllowedUserRole.Admin)
+            await AdministratorMutationLock.WaitAsync(ct);
+            try
             {
-                await EnsureNotLastAdministratorAsync(ct);
-            }
+                return await dataStore.ExecuteInTransactionAsync(async () =>
+                {
+                    await RequireAdministratorAsync(ct);
+                    var allowedUser = await RequireAllowedUserAsync(allowedUserId, ct);
+                    var role = ParseRole(request.Role);
+                    if (allowedUser.Role == AllowedUserRole.Admin && role != AllowedUserRole.Admin)
+                    {
+                        await EnsureNotLastAdministratorAsync(ct);
+                    }
 
-            allowedUser.Role = role;
-            await dataStore.UpdateAllowedUserAsync(allowedUser, ct);
-            await dataStore.SaveChangesAsync(ct);
-            return ToAllowedUserDto(allowedUser);
+                    allowedUser.Role = role;
+                    await dataStore.UpdateAllowedUserAsync(allowedUser, ct);
+                    await dataStore.SaveChangesAsync(ct);
+                    return ToAllowedUserDto(allowedUser);
+                }, ct);
+            }
+            finally
+            {
+                AdministratorMutationLock.Release();
+            }
         }
 
         public async Task ArchiveAllowedUserAsync(Guid allowedUserId, CancellationToken ct)
         {
-            await RequireAdministratorAsync(ct);
-            var allowedUser = await RequireAllowedUserAsync(allowedUserId, ct);
-            if (allowedUser.Role == AllowedUserRole.Admin)
+            await AdministratorMutationLock.WaitAsync(ct);
+            try
             {
-                await EnsureNotLastAdministratorAsync(ct);
-            }
+                await dataStore.ExecuteInTransactionAsync(async () =>
+                {
+                    await RequireAdministratorAsync(ct);
+                    var allowedUser = await RequireAllowedUserAsync(allowedUserId, ct);
+                    if (allowedUser.Role == AllowedUserRole.Admin)
+                    {
+                        await EnsureNotLastAdministratorAsync(ct);
+                    }
 
-            allowedUser.DeletedUtc = DateTimeOffset.UtcNow;
-            await dataStore.UpdateAllowedUserAsync(allowedUser, ct);
-            await dataStore.SaveChangesAsync(ct);
+                    allowedUser.DeletedUtc = DateTimeOffset.UtcNow;
+                    await dataStore.UpdateAllowedUserAsync(allowedUser, ct);
+                    foreach (var token in await dataStore.GetTokensAsync(allowedUser.Id, ct))
+                    {
+                        if (!token.RevokedUtc.HasValue)
+                        {
+                            token.RevokedUtc = DateTimeOffset.UtcNow;
+                            await dataStore.UpdateTokenAsync(token, ct);
+                        }
+                    }
+
+                    await dataStore.SaveChangesAsync(ct);
+                    return true;
+                }, ct);
+            }
+            finally
+            {
+                AdministratorMutationLock.Release();
+            }
         }
 
         public async Task<IReadOnlyCollection<TemplateDto>> GetCatalogueAsync(CancellationToken ct)

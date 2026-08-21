@@ -11,6 +11,10 @@ namespace HealthTracker.Web.Mcp
     [McpServerToolType]
     public sealed class HealthPulseMcpTools(HealthTrackerService tracker, PersonalAccessTokenService tokens)
     {
+        private const int MaxImportJsonCharacters = 524_288;
+        private const int MaxImportedTemplates = 100;
+        private const int MaxImportedReadings = 5_000;
+
         [McpServerTool, Description("Lists the current user's measurement templates and tracking state.")]
         public Task<IReadOnlyCollection<TemplateDto>> ListTemplates(CancellationToken ct) => tracker.GetCatalogueAsync(ct);
 
@@ -86,6 +90,11 @@ namespace HealthTracker.Web.Mcp
 
         private static ImportDocument ParseImport(string json)
         {
+            if (string.IsNullOrWhiteSpace(json) || json.Length > MaxImportJsonCharacters)
+            {
+                throw new InvalidOperationException("Import JSON exceeds the supported size.");
+            }
+
             try
             {
                 var document = JsonSerializer.Deserialize<ImportDocument>(json, new JsonSerializerOptions
@@ -95,6 +104,13 @@ namespace HealthTracker.Web.Mcp
                 if (document?.Templates is null || document.Readings is null)
                 {
                     throw new InvalidOperationException("Import JSON must contain templates and readings arrays.");
+                }
+                if (
+                    document.Templates.Count > MaxImportedTemplates
+                    || document.Readings.Count > MaxImportedReadings
+                )
+                {
+                    throw new InvalidOperationException("Import JSON exceeds the supported record limit.");
                 }
 
                 foreach (var template in document.Templates)

@@ -149,6 +149,32 @@ namespace HealthTracker.Application.Tests
         }
 
         [Fact]
+        public async Task Archiving_a_user_revokes_tokens_that_cannot_be_restored_by_reactivation()
+        {
+            var store = new FakeStore();
+            var service = new HealthTrackerService(store, new FakeCurrentUser());
+            var user = await service.AddAllowedUserAsync(
+                new AddAllowedUserDto("Family@Example.com", "Member"),
+                CancellationToken.None
+            );
+            var token = new PersonalAccessToken
+            {
+                AllowedUserId = user.Id,
+                Hash = "A valid test hash",
+                ExpiresUtc = DateTimeOffset.UtcNow.AddDays(1),
+            };
+            store.Tokens.Add(token);
+
+            await service.ArchiveAllowedUserAsync(user.Id, CancellationToken.None);
+            await service.AddAllowedUserAsync(
+                new AddAllowedUserDto("family@example.com", "Member"),
+                CancellationToken.None
+            );
+
+            Assert.True(token.RevokedUtc.HasValue);
+        }
+
+        [Fact]
         public async Task Last_administrator_cannot_be_archived_or_demoted()
         {
             var store = new FakeStore();
@@ -235,6 +261,7 @@ namespace HealthTracker.Application.Tests
             ];
             public List<ApplicationUser> Users { get; } = [];
             public List<PersonalAccessToken> Tokens { get; } = [];
+            public List<McpAuditLog> AuditLogs { get; } = [];
 
             public Task<ApplicationUser?> FindUserBySubjectAsync(
                 string subject,
@@ -421,8 +448,13 @@ namespace HealthTracker.Application.Tests
                 return Task.CompletedTask;
             }
             public Task UpdateTokenAsync(PersonalAccessToken token, CancellationToken ct) => Task.CompletedTask;
-            public Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct) => Task.CompletedTask;
-            public Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken ct) => Task.FromResult(0);
+            public Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct)
+            {
+                AuditLogs.Add(auditLog);
+                return Task.CompletedTask;
+            }
+            public Task UpdateMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct) => Task.CompletedTask;
+            public Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken ct) => Task.FromResult(AuditLogs.Count(x => x.PersonalAccessTokenId == tokenId && x.OccurredUtc >= sinceUtc));
             public Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken ct) => Task.FromResult(0);
 
             public Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(

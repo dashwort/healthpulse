@@ -1,3 +1,5 @@
+using System.Data;
+
 using HealthTracker.Application.Abstractions;
 using HealthTracker.Domain.Models;
 using HealthTracker.Infrastructure.Persistence.Mappings;
@@ -265,6 +267,12 @@ namespace HealthTracker.Infrastructure.Persistence
 
         public Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct) => db.McpAuditLogs.AddAsync(new McpAuditLogRecord { Id = auditLog.Id, PersonalAccessTokenId = auditLog.PersonalAccessTokenId, AllowedUserId = auditLog.AllowedUserId, Method = auditLog.Method, Outcome = auditLog.Outcome, OccurredUtc = auditLog.OccurredUtc }, ct).AsTask();
 
+        public async Task UpdateMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct)
+        {
+            var record = await db.McpAuditLogs.SingleAsync(x => x.Id == auditLog.Id, ct);
+            record.Outcome = auditLog.Outcome;
+        }
+
         public Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken ct) => db.McpAuditLogs.CountAsync(x => x.PersonalAccessTokenId == tokenId && x.OccurredUtc >= sinceUtc, ct);
 
         public async Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken ct)
@@ -350,7 +358,7 @@ namespace HealthTracker.Infrastructure.Persistence
 
         public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct)
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
             try
             {
                 var result = await operation();

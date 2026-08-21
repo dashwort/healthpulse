@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -20,5 +20,6 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\HealthTracker.Application\HealthTracker.Application.csproj" />
         <ProjectReference Include="..\..\src\HealthTracker.Domain\HealthTracker.Domain.csproj" />
+        <ProjectReference Include="..\..\src\HealthTracker.Web\HealthTracker.Web.csproj" />
     </ItemGroup>
 </Project>

@@ -33,6 +33,7 @@ namespace HealthTracker.Application.Abstractions
         Task AddTokenAsync(PersonalAccessToken token, CancellationToken cancellationToken);
         Task UpdateTokenAsync(PersonalAccessToken token, CancellationToken cancellationToken);
         Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken cancellationToken);
+        Task UpdateMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken cancellationToken);
         Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken cancellationToken);
         Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken cancellationToken);
         Task<IReadOnlyCollection<MeasurementTemplate>> GetCatalogueAsync(
