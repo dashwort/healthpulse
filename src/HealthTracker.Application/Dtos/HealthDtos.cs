@@ -55,4 +55,18 @@ namespace HealthTracker.Application.Dtos
         DateTimeOffset RecordedAtUtc,
         decimal? ChangeFromPrevious
     );
+
+    public sealed record AllowedUserDto(
+        Guid Id,
+        string Email,
+        string Role,
+        bool HasSignedIn,
+        DateTimeOffset? FirstSignedInUtc,
+        DateTimeOffset? LastSignedInUtc,
+        bool IsArchived
+    );
+
+    public sealed record AddAllowedUserDto(string Email, string Role);
+
+    public sealed record UpdateAllowedUserRoleDto(string Role);
 }

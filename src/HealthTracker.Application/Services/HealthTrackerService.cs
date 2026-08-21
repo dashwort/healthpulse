@@ -7,6 +7,82 @@ namespace HealthTracker.Application.Services
 {
     public sealed class HealthTrackerService(IHealthDataStore dataStore, ICurrentUser currentUser)
     {
+        public async Task<IReadOnlyCollection<AllowedUserDto>> GetAllowedUsersAsync(
+            bool includeArchived,
+            CancellationToken ct
+        )
+        {
+            await RequireAdministratorAsync(ct);
+            return [
+                .. (await dataStore.GetAllowedUsersAsync(includeArchived, ct)).Select(ToAllowedUserDto),
+            ];
+        }
+
+        public async Task<AllowedUserDto> AddAllowedUserAsync(
+            AddAllowedUserDto request,
+            CancellationToken ct
+        )
+        {
+            await RequireAdministratorAsync(ct);
+            var (email, normalizedEmail) = NormalizeEmail(request.Email);
+            var role = ParseRole(request.Role);
+            var existing = await dataStore.FindAllowedUserByEmailAsync(normalizedEmail, true, ct);
+            if (existing is null)
+            {
+                existing = new AllowedUser
+                {
+                    Email = email,
+                    NormalizedEmail = normalizedEmail,
+                    Role = role,
+                };
+                await dataStore.AddAllowedUserAsync(existing, ct);
+            }
+            else
+            {
+                existing.Email = email;
+                existing.Role = role;
+                existing.DeletedUtc = null;
+                await dataStore.UpdateAllowedUserAsync(existing, ct);
+            }
+
+            await dataStore.SaveChangesAsync(ct);
+            return ToAllowedUserDto(existing);
+        }
+
+        public async Task<AllowedUserDto> UpdateAllowedUserRoleAsync(
+            Guid allowedUserId,
+            UpdateAllowedUserRoleDto request,
+            CancellationToken ct
+        )
+        {
+            await RequireAdministratorAsync(ct);
+            var allowedUser = await RequireAllowedUserAsync(allowedUserId, ct);
+            var role = ParseRole(request.Role);
+            if (allowedUser.Role == AllowedUserRole.Admin && role != AllowedUserRole.Admin)
+            {
+                await EnsureNotLastAdministratorAsync(ct);
+            }
+
+            allowedUser.Role = role;
+            await dataStore.UpdateAllowedUserAsync(allowedUser, ct);
+            await dataStore.SaveChangesAsync(ct);
+            return ToAllowedUserDto(allowedUser);
+        }
+
+        public async Task ArchiveAllowedUserAsync(Guid allowedUserId, CancellationToken ct)
+        {
+            await RequireAdministratorAsync(ct);
+            var allowedUser = await RequireAllowedUserAsync(allowedUserId, ct);
+            if (allowedUser.Role == AllowedUserRole.Admin)
+            {
+                await EnsureNotLastAdministratorAsync(ct);
+            }
+
+            allowedUser.DeletedUtc = DateTimeOffset.UtcNow;
+            await dataStore.UpdateAllowedUserAsync(allowedUser, ct);
+            await dataStore.SaveChangesAsync(ct);
+        }
+
         public async Task<IReadOnlyCollection<TemplateDto>> GetCatalogueAsync(CancellationToken ct)
         {
             var user = await GetCurrentUserAsync(ct);
@@ -15,7 +91,7 @@ namespace HealthTracker.Application.Services
                 .ToHashSet();
             return
             [
-                .. (await dataStore.GetCatalogueAsync(ct))
+                .. (await dataStore.GetCatalogueAsync(user.Id, ct))
                     .Select(x => x.ToDto(trackedIds.Contains(x.Id)))
                     .OrderBy(x => x.Category)
                     .ThenBy(x => x.Name),
@@ -190,10 +266,19 @@ namespace HealthTracker.Application.Services
                 throw new InvalidOperationException("The requested page is invalid.");
             }
 
-            var readings = await GetReadingsAsync(templateId, fromUtc, toUtc, ct);
+            var user = await GetCurrentUserAsync(ct);
+            var (readings, totalCount) = await dataStore.GetReadingsPageAsync(
+                user.Id,
+                templateId,
+                fromUtc,
+                toUtc,
+                page,
+                pageSize,
+                ct
+            );
             return new ReadingPageDto(
-                [.. readings.Skip((page - 1) * pageSize).Take(pageSize)],
-                readings.Count,
+                [.. readings.Select(x => x.ToDto())],
+                totalCount,
                 page,
                 pageSize
             );
@@ -268,25 +353,99 @@ namespace HealthTracker.Application.Services
 
         private async Task<ApplicationUser> GetCurrentUserAsync(CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(currentUser.Subject))
+            if (string.IsNullOrWhiteSpace(currentUser.Subject) || string.IsNullOrWhiteSpace(currentUser.Email))
+            {
+                throw new UnauthorizedAccessException();
+            }
+
+            var allowedUser = await dataStore.FindAllowedUserByEmailAsync(
+                NormalizeEmail(currentUser.Email).NormalizedEmail,
+                false,
+                ct
+            );
+            if (allowedUser is null)
             {
                 throw new UnauthorizedAccessException();
             }
 
             var user = await dataStore.FindUserBySubjectAsync(currentUser.Subject, ct);
-            if (user is not null)
+            if (user is null)
             {
-                return user;
+                user = new ApplicationUser
+                {
+                    Subject = currentUser.Subject,
+                    DisplayName = currentUser.DisplayName,
+                };
+                await dataStore.AddUserAsync(user, ct);
+                allowedUser.ApplicationUserId = user.Id;
+                allowedUser.FirstSignedInUtc ??= DateTimeOffset.UtcNow;
             }
 
-            user = new ApplicationUser
-            {
-                Subject = currentUser.Subject,
-                DisplayName = currentUser.DisplayName,
-            };
-            await dataStore.AddUserAsync(user, ct);
+            allowedUser.LastSignedInUtc = DateTimeOffset.UtcNow;
+            await dataStore.UpdateAllowedUserAsync(allowedUser, ct);
             await dataStore.SaveChangesAsync(ct);
             return user;
+        }
+
+        private async Task<AllowedUser> RequireAdministratorAsync(CancellationToken ct)
+        {
+            await GetCurrentUserAsync(ct);
+            var allowedUser = await dataStore.FindAllowedUserByEmailAsync(
+                NormalizeEmail(currentUser.Email).NormalizedEmail,
+                false,
+                ct
+            );
+            return allowedUser is { Role: AllowedUserRole.Admin }
+                ? allowedUser
+                : throw new UnauthorizedAccessException();
+        }
+
+        private async Task<AllowedUser> RequireAllowedUserAsync(Guid allowedUserId, CancellationToken ct)
+        {
+            return (await dataStore.GetAllowedUsersAsync(true, ct)).SingleOrDefault(x => x.Id == allowedUserId)
+                ?? throw new KeyNotFoundException("User not found.");
+        }
+
+        private async Task EnsureNotLastAdministratorAsync(CancellationToken ct)
+        {
+            if (await dataStore.CountActiveAdministratorsAsync(ct) <= 1)
+            {
+                throw new InvalidOperationException("At least one active administrator is required.");
+            }
+        }
+
+        private static AllowedUserDto ToAllowedUserDto(AllowedUser user)
+        {
+            return new(
+                user.Id,
+                user.Email,
+                user.Role.ToString(),
+                user.FirstSignedInUtc.HasValue,
+                user.FirstSignedInUtc,
+                user.LastSignedInUtc,
+                user.DeletedUtc.HasValue
+            );
+        }
+
+        private static (string Email, string NormalizedEmail) NormalizeEmail(string email)
+        {
+            var trimmed = email?.Trim() ?? string.Empty;
+            if (
+                trimmed.Length is 0 or > 320
+                || !System.Net.Mail.MailAddress.TryCreate(trimmed, out _)
+            )
+            {
+                throw new InvalidOperationException("A valid email address is required.");
+            }
+
+            return (trimmed, trimmed.ToUpperInvariant());
+        }
+
+        private static AllowedUserRole ParseRole(string role)
+        {
+            return Enum.TryParse<AllowedUserRole>(role, true, out var parsed)
+                ? parsed
+                : throw new InvalidOperationException("The user role is invalid.");
         }
 
         private async Task<MeasurementTemplate> RequireCustomTemplateAsync(

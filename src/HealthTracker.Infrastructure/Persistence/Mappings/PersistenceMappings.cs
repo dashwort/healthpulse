@@ -5,6 +5,48 @@ namespace HealthTracker.Infrastructure.Persistence.Mappings
 {
     public static class PersistenceMappings
     {
+        public static AllowedUser ToDomain(this AllowedUserRecord record)
+        {
+            return new()
+            {
+                Id = record.Id,
+                Email = record.Email,
+                NormalizedEmail = record.NormalizedEmail,
+                Role = Enum.Parse<AllowedUserRole>(record.Role),
+                ApplicationUserId = record.ApplicationUserId,
+                CreatedUtc = record.CreatedUtc,
+                FirstSignedInUtc = record.FirstSignedInUtc,
+                LastSignedInUtc = record.LastSignedInUtc,
+                DeletedUtc = record.DeletedUtc,
+            };
+        }
+
+        public static AllowedUserRecord ToRecord(this AllowedUser user)
+        {
+            return new()
+            {
+                Id = user.Id,
+                Email = user.Email,
+                NormalizedEmail = user.NormalizedEmail,
+                Role = user.Role.ToString(),
+                ApplicationUserId = user.ApplicationUserId,
+                CreatedUtc = user.CreatedUtc,
+                FirstSignedInUtc = user.FirstSignedInUtc,
+                LastSignedInUtc = user.LastSignedInUtc,
+                DeletedUtc = user.DeletedUtc,
+            };
+        }
+
+        public static void Apply(this AllowedUser source, AllowedUserRecord target)
+        {
+            target.Email = source.Email;
+            target.Role = source.Role.ToString();
+            target.ApplicationUserId = source.ApplicationUserId;
+            target.FirstSignedInUtc = source.FirstSignedInUtc;
+            target.LastSignedInUtc = source.LastSignedInUtc;
+            target.DeletedUtc = source.DeletedUtc;
+        }
+
         public static ApplicationUser ToDomain(this UserRecord record)
         {
             return new()

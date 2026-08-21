@@ -10,5 +10,10 @@ namespace HealthTracker.Application.Abstractions
         {
             get;
         }
+
+        string Email
+        {
+            get;
+        }
     }
 }

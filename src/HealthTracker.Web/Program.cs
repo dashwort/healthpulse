@@ -11,6 +11,8 @@ using HealthTracker.Web.Services;
 
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 
@@ -32,7 +34,8 @@ builder
         $"settings.{builder.Environment.EnvironmentName}.json",
         optional: true,
         reloadOnChange: true
-    );
+    )
+    .AddEnvironmentVariables();
 var oidc =
     builder.Configuration.GetSection(ExternalOidcSettings.SectionName).Get<ExternalOidcSettings>()
     ?? new ExternalOidcSettings();
@@ -40,6 +43,7 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+builder.Services.AddScoped<AccessControlAuthorizationHandler>();
 builder.Services.AddScoped<HealthTrackerService>();
 builder.Services.AddMudServices();
 builder.Services.AddHostedService<SoftDeletionPurgeService>();
@@ -92,13 +96,65 @@ else
             {
                 NameClaimType = "name",
             };
+            options.Events = new OpenIdConnectEvents
+            {
+                OnTokenValidated = async context =>
+                {
+                    var email =
+                        context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                        ?? context.Principal?.FindFirst("email")?.Value;
+                    var emailVerified = context.Principal?.FindFirst("email_verified")?.Value;
+                    if (
+                        string.IsNullOrWhiteSpace(email)
+                        || !string.Equals(emailVerified, "true", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        context.Fail("Sign-in failed.");
+                        return;
+                    }
+
+                    var dataStore = context.HttpContext.RequestServices.GetRequiredService<IHealthDataStore>();
+                    if (
+                        await dataStore.FindAllowedUserByEmailAsync(
+                            email.Trim().ToUpperInvariant(),
+                            false,
+                            context.HttpContext.RequestAborted
+                        ) is null
+                    )
+                    {
+                        context.Fail("Sign-in failed.");
+                    }
+                },
+                OnRemoteFailure = context =>
+                {
+                    context.Response.Redirect("/Error");
+                    context.HandleResponse();
+                    return Task.CompletedTask;
+                },
+            };
             foreach (var scope in oidc.Scopes)
             {
                 options.Scope.Add(scope);
             }
         });
 }
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .AddRequirements(new ActiveAllowedUserRequirement())
+        .Build();
+    options.AddPolicy(
+        "Administrator",
+        policy =>
+            policy
+                .RequireAuthenticatedUser()
+                .AddRequirements(new ActiveAllowedUserRequirement(), new AdministratorRequirement())
+    );
+});
+builder.Services.AddScoped<IAuthorizationHandler>(
+    serviceProvider => serviceProvider.GetRequiredService<AccessControlAuthorizationHandler>()
+);
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
@@ -120,7 +176,9 @@ app.UseAntiforgery();
 if (usesDevelopmentAuthentication)
 {
     app.MapGet("/login", () => Results.Redirect("/"));
-    app.MapGet("/logout", () => Results.Redirect("/"));
+    app.MapPost("/logout", () => Results.Redirect("/"))
+        .RequireAuthorization()
+        .WithMetadata(new RequireAntiforgeryTokenAttribute(true));
 }
 else
 {
@@ -135,20 +193,19 @@ else
                 [OpenIdConnectDefaults.AuthenticationScheme]
             )
     );
-    app.MapGet(
+    app.MapPost(
         "/logout",
         () =>
             Results.SignOut(
                 new Microsoft.AspNetCore.Authentication.AuthenticationProperties
                 {
-                    RedirectUri = "/",
+                    RedirectUri = "/signed-out",
                 },
-                [
-                    CookieAuthenticationDefaults.AuthenticationScheme,
-                    OpenIdConnectDefaults.AuthenticationScheme,
-                ]
+                [CookieAuthenticationDefaults.AuthenticationScheme]
             )
-    );
+    )
+        .RequireAuthorization()
+        .WithMetadata(new RequireAntiforgeryTokenAttribute(true));
 }
 app.MapStaticAssets();
 app.MapControllers();

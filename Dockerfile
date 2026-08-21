@@ -11,7 +11,7 @@ COPY ["src/HealthTracker.Web/HealthTracker.Web.csproj", "src/HealthTracker.Web/"
 RUN dotnet restore "src/HealthTracker.Web/HealthTracker.Web.csproj"
 
 COPY src ./src
-RUN dotnet publish "src/HealthTracker.Web/HealthTracker.Web.csproj" --configuration Release --no-restore --output /app/publish --property UseAppHost=false
+RUN dotnet publish "src/HealthTracker.Web/HealthTracker.Web.csproj" --configuration Release --output /app/publish --property UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app

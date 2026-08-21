@@ -13,5 +13,7 @@ namespace HealthTracker.Web.Authentication
             ?? string.Empty;
         public string DisplayName =>
             User.Identity?.Name ?? User.FindFirstValue("name") ?? "HealthPulse user";
+        public string Email =>
+            User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email") ?? string.Empty;
     }
 }

@@ -40,6 +40,8 @@ Configure the OpenID Connect settings supplied to the web application with your 
 
 Never commit a real client secret. In CI/CD or hosted environments, use secret storage or environment variables such as `Authentication__OpenIdConnect__ClientSecret`. When running in Development with no authority configured, the app uses a local development identity; this fallback is disabled outside Development.
 
+HealthPulse is invitation-only. Set `AccessControl__InitialAdministratorEmail` before the first start; it seeds the first administrator, who can then manage approved Google email addresses from User Management. Google sign-in requires a verified email matching an active approved address. Copy `.env.example` to an untracked `.env` for local container settings. Existing local Docker OAuth settings can be inspected from the running container and copied into that ignored file; never add those values to tracked settings or documentation.
+
 ### Database and deployment
 
 SQLite is the default adapter and stores data in the configured application data directory. The persistence boundary is database-agnostic; provider changes belong in the Infrastructure composition root and migration workflow. In hosted deployments, persist the ASP.NET Core data-protection keys on durable protected storage so authentication cookies survive restarts.
@@ -53,7 +55,7 @@ ghcr.io/dashwort/healthpulse:latest
 ghcr.io/dashwort/healthpulse:sha-<commit>
 ```
 
-The container listens on port `8080`. Supply production OIDC settings through environment variables such as `Authentication__OpenIdConnect__Authority`, `Authentication__OpenIdConnect__ClientId`, and `Authentication__OpenIdConnect__ClientSecret`. Mount durable storage at `/app/App_Data` to retain the SQLite database and ASP.NET Core data-protection keys across container replacements.
+The container listens on port `8080`. Supply production OIDC settings through environment variables such as `Authentication__OpenIdConnect__Authority`, `Authentication__OpenIdConnect__ClientId`, and `Authentication__OpenIdConnect__ClientSecret`; environment variables override the JSON defaults. For Google, use `https://accounts.google.com` as the authority and register `http://localhost:8081/signin-oidc` for local OAuth testing (or the equivalent public HTTPS callback). Mount durable storage at `/app/App_Data` to retain the SQLite database and ASP.NET Core data-protection keys across container replacements.
 
 Create future migrations with the EF Core 10 tool:
 

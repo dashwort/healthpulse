@@ -4,6 +4,20 @@ using HealthTracker.Application.Dtos;
 
 namespace HealthTracker.Web.Models
 {
+    public sealed record AllowedUserRequest(string Email, string Role);
+
+    public sealed record AllowedUserRoleRequest(string Role);
+
+    public sealed record AllowedUserResponse(
+        Guid Id,
+        string Email,
+        string Role,
+        bool HasSignedIn,
+        DateTimeOffset? FirstSignedInUtc,
+        DateTimeOffset? LastSignedInUtc,
+        bool IsArchived
+    );
+
     public sealed record TemplateResponse(
         Guid Id,
         string? Code,
@@ -96,6 +110,19 @@ namespace HealthTracker.Web.Models
 
     public static class ApiDtoMappings
     {
+        public static AllowedUserResponse ToResponse(this AllowedUserDto user)
+        {
+            return new(
+                user.Id,
+                user.Email,
+                user.Role,
+                user.HasSignedIn,
+                user.FirstSignedInUtc,
+                user.LastSignedInUtc,
+                user.IsArchived
+            );
+        }
+
         public static CreateCustomTemplateDto ToCreateDto(this CustomTemplateRequest request)
         {
             return new(request.Name, request.Category, request.Unit);

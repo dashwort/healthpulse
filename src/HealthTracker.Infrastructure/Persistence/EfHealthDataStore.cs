@@ -22,6 +22,7 @@ namespace HealthTracker.Infrastructure.Persistence
         }
 
         public async Task<IReadOnlyCollection<MeasurementTemplate>> GetCatalogueAsync(
+            Guid userId,
             CancellationToken ct
         )
         {
@@ -29,7 +30,10 @@ namespace HealthTracker.Infrastructure.Persistence
                 .. (
                     await db
                         .Templates.AsNoTracking()
-                        .Where(x => x.DeletedUtc == null)
+                        .Where(x =>
+                            x.DeletedUtc == null
+                            && (x.OwnerUserId == null || x.OwnerUserId == userId)
+                        )
                         .OrderBy(x => x.Name)
                         .ToArrayAsync(ct)
                 ).Select(x => x.ToDomain()),
@@ -167,6 +171,86 @@ namespace HealthTracker.Infrastructure.Persistence
                         .ToArrayAsync(ct)
                 ).Select(x => x.ToDomain()),
             ];
+        }
+
+        public async Task<AllowedUser?> FindAllowedUserByEmailAsync(
+            string normalizedEmail,
+            bool includeDeleted,
+            CancellationToken ct
+        )
+        {
+            return (await db.AllowedUsers.SingleOrDefaultAsync(
+                x => x.NormalizedEmail == normalizedEmail && (includeDeleted || x.DeletedUtc == null),
+                ct
+            ))?.ToDomain();
+        }
+
+        public async Task<IReadOnlyCollection<AllowedUser>> GetAllowedUsersAsync(
+            bool includeDeleted,
+            CancellationToken ct
+        )
+        {
+            var query = db.AllowedUsers.AsNoTracking();
+            if (!includeDeleted)
+            {
+                query = query.Where(x => x.DeletedUtc == null);
+            }
+
+            return [.. (await query.OrderBy(x => x.Email).ToArrayAsync(ct)).Select(x => x.ToDomain())];
+        }
+
+        public Task<int> CountActiveAdministratorsAsync(CancellationToken ct)
+        {
+            return db.AllowedUsers.CountAsync(
+                x => x.Role == AllowedUserRole.Admin.ToString() && x.DeletedUtc == null,
+                ct
+            );
+        }
+
+        public Task AddAllowedUserAsync(AllowedUser user, CancellationToken ct)
+        {
+            return db.AllowedUsers.AddAsync(user.ToRecord(), ct).AsTask();
+        }
+
+        public async Task UpdateAllowedUserAsync(AllowedUser user, CancellationToken ct)
+        {
+            var record = await db.AllowedUsers.SingleAsync(x => x.Id == user.Id, ct);
+            user.Apply(record);
+        }
+
+        public async Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(
+            Guid userId,
+            Guid? templateId,
+            DateTimeOffset? fromUtc,
+            DateTimeOffset? toUtc,
+            int page,
+            int pageSize,
+            CancellationToken ct
+        )
+        {
+            var query = db
+                .Readings.Include(x => x.Template)
+                .AsNoTracking()
+                .Where(x =>
+                    x.UserId == userId
+                    && x.DeletedUtc == null
+                    && (!templateId.HasValue || x.TemplateId == templateId)
+                    && (!fromUtc.HasValue || x.RecordedAtUtc >= fromUtc)
+                    && (!toUtc.HasValue || x.RecordedAtUtc <= toUtc)
+                );
+            var totalCount = await query.CountAsync(ct);
+            var skip = (long)(page - 1) * pageSize;
+            if (skip >= totalCount)
+            {
+                return (Array.Empty<HealthReading>(), totalCount);
+            }
+
+            var items = await query
+                .OrderByDescending(x => x.RecordedAtUtc)
+                .Skip((int)skip)
+                .Take(pageSize)
+                .ToArrayAsync(ct);
+            return ([.. items.Select(x => x.ToDomain())], totalCount);
         }
 
         public async Task UpdateReadingAsync(HealthReading reading, CancellationToken ct)

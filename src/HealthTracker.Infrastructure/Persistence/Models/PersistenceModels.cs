@@ -14,6 +14,19 @@ namespace HealthTracker.Infrastructure.Persistence.Models
         }
     }
 
+    public sealed class AllowedUserRecord
+    {
+        public Guid Id { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string NormalizedEmail { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public Guid? ApplicationUserId { get; set; }
+        public DateTimeOffset CreatedUtc { get; set; }
+        public DateTimeOffset? FirstSignedInUtc { get; set; }
+        public DateTimeOffset? LastSignedInUtc { get; set; }
+        public DateTimeOffset? DeletedUtc { get; set; }
+    }
+
     public sealed class TemplateRecord
     {
         public Guid Id

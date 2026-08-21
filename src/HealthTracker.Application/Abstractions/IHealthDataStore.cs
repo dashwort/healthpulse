@@ -9,7 +9,20 @@ namespace HealthTracker.Application.Abstractions
             CancellationToken cancellationToken
         );
         Task AddUserAsync(ApplicationUser user, CancellationToken cancellationToken);
+        Task<AllowedUser?> FindAllowedUserByEmailAsync(
+            string normalizedEmail,
+            bool includeDeleted,
+            CancellationToken cancellationToken
+        );
+        Task<IReadOnlyCollection<AllowedUser>> GetAllowedUsersAsync(
+            bool includeDeleted,
+            CancellationToken cancellationToken
+        );
+        Task<int> CountActiveAdministratorsAsync(CancellationToken cancellationToken);
+        Task AddAllowedUserAsync(AllowedUser user, CancellationToken cancellationToken);
+        Task UpdateAllowedUserAsync(AllowedUser user, CancellationToken cancellationToken);
         Task<IReadOnlyCollection<MeasurementTemplate>> GetCatalogueAsync(
+            Guid userId,
             CancellationToken cancellationToken
         );
         Task<MeasurementTemplate?> GetTemplateForUserAsync(
@@ -44,6 +57,15 @@ namespace HealthTracker.Application.Abstractions
             Guid? templateId,
             DateTimeOffset? fromUtc,
             DateTimeOffset? toUtc,
+            CancellationToken cancellationToken
+        );
+        Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(
+            Guid userId,
+            Guid? templateId,
+            DateTimeOffset? fromUtc,
+            DateTimeOffset? toUtc,
+            int page,
+            int pageSize,
             CancellationToken cancellationToken
         );
         Task UpdateReadingAsync(HealthReading reading, CancellationToken cancellationToken);

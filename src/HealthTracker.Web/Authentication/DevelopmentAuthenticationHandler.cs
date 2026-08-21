@@ -9,7 +9,8 @@ namespace HealthTracker.Web.Authentication
     public sealed class DevelopmentAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
-        UrlEncoder encoder
+        UrlEncoder encoder,
+        IConfiguration configuration
     ) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -18,6 +19,12 @@ namespace HealthTracker.Web.Authentication
                 [
                     new Claim(ClaimTypes.NameIdentifier, "development-user"),
                     new Claim(ClaimTypes.Name, "Development user"),
+                    new Claim(
+                        ClaimTypes.Email,
+                        configuration["Authentication:Development:Email"]
+                            ?? "developer@healthpulse.local"
+                    ),
+                    new Claim("email_verified", "true"),
                 ],
                 Scheme.Name
             );

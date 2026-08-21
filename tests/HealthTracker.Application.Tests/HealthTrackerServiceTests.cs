@@ -96,10 +96,82 @@ namespace HealthTracker.Application.Tests
             Assert.Single(page.Items);
         }
 
+        [Fact]
+        public async Task Catalogue_excludes_custom_templates_owned_by_another_user()
+        {
+            var store = new FakeStore();
+            var ownTemplate = new MeasurementTemplate
+            {
+                Id = Guid.NewGuid(),
+                OwnerUserId = store.User.Id,
+                Name = "Own metric",
+                Category = "Custom",
+                NormalizedUnit = "unit",
+                AllowedUnits = ["unit"],
+            };
+            var otherTemplate = new MeasurementTemplate
+            {
+                Id = Guid.NewGuid(),
+                OwnerUserId = Guid.NewGuid(),
+                Name = "Private metric",
+                Category = "Custom",
+                NormalizedUnit = "unit",
+                AllowedUnits = ["unit"],
+            };
+            store.Templates.AddRange([ownTemplate, otherTemplate]);
+            var service = new HealthTrackerService(store, new FakeCurrentUser());
+
+            var catalogue = await service.GetCatalogueAsync(CancellationToken.None);
+
+            Assert.Contains(catalogue, x => x.Id == ownTemplate.Id);
+            Assert.DoesNotContain(catalogue, x => x.Id == otherTemplate.Id);
+        }
+
+        [Fact]
+        public async Task Allowed_user_can_be_archived_and_reactivated_case_insensitively()
+        {
+            var store = new FakeStore();
+            var service = new HealthTrackerService(store, new FakeCurrentUser());
+
+            var added = await service.AddAllowedUserAsync(
+                new AddAllowedUserDto("Family@Example.com", "Member"),
+                CancellationToken.None
+            );
+            await service.ArchiveAllowedUserAsync(added.Id, CancellationToken.None);
+            var reactivated = await service.AddAllowedUserAsync(
+                new AddAllowedUserDto("family@example.com", "Admin"),
+                CancellationToken.None
+            );
+
+            Assert.Equal(added.Id, reactivated.Id);
+            Assert.Equal("Admin", reactivated.Role);
+            Assert.False(reactivated.IsArchived);
+        }
+
+        [Fact]
+        public async Task Last_administrator_cannot_be_archived_or_demoted()
+        {
+            var store = new FakeStore();
+            var service = new HealthTrackerService(store, new FakeCurrentUser());
+            var administrator = Assert.Single(store.AllowedUsers);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.ArchiveAllowedUserAsync(administrator.Id, CancellationToken.None)
+            );
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.UpdateAllowedUserRoleAsync(
+                    administrator.Id,
+                    new UpdateAllowedUserRoleDto("Member"),
+                    CancellationToken.None
+                )
+            );
+        }
+
         private sealed class FakeCurrentUser : ICurrentUser
         {
             public string Subject => "test-user";
             public string DisplayName => "Test user";
+            public string Email => "test@example.com";
         }
 
         private sealed class FakeStore : IHealthDataStore
@@ -116,6 +188,15 @@ namespace HealthTracker.Application.Tests
             public List<MeasurementTemplate> Templates { get; } = [];
             public List<UserTrackedTemplate> Trackings { get; } = [];
             public List<HealthReading> Readings { get; } = [];
+            public List<AllowedUser> AllowedUsers { get; } =
+            [
+                new()
+                {
+                    Email = "test@example.com",
+                    NormalizedEmail = "TEST@EXAMPLE.COM",
+                    Role = AllowedUserRole.Admin,
+                },
+            ];
 
             public Task<ApplicationUser?> FindUserBySubjectAsync(
                 string subject,
@@ -131,10 +212,13 @@ namespace HealthTracker.Application.Tests
             }
 
             public Task<IReadOnlyCollection<MeasurementTemplate>> GetCatalogueAsync(
+                Guid userId,
                 CancellationToken ct
             )
             {
-                return Task.FromResult<IReadOnlyCollection<MeasurementTemplate>>(Templates);
+                return Task.FromResult<IReadOnlyCollection<MeasurementTemplate>>([
+                    .. Templates.Where(x => x.OwnerUserId is null || x.OwnerUserId == userId),
+                ]);
             }
 
             public Task<MeasurementTemplate?> GetTemplateForUserAsync(
@@ -236,6 +320,77 @@ namespace HealthTracker.Application.Tests
                         )
                         .OrderByDescending(x => x.RecordedAtUtc),
                 ]);
+            }
+
+            public Task<AllowedUser?> FindAllowedUserByEmailAsync(
+                string normalizedEmail,
+                bool includeDeleted,
+                CancellationToken ct
+            )
+            {
+                return Task.FromResult(
+                    AllowedUsers.SingleOrDefault(x =>
+                        x.NormalizedEmail == normalizedEmail
+                        && (includeDeleted || x.DeletedUtc is null)
+                    )
+                );
+            }
+
+            public Task<IReadOnlyCollection<AllowedUser>> GetAllowedUsersAsync(
+                bool includeDeleted,
+                CancellationToken ct
+            )
+            {
+                return Task.FromResult<IReadOnlyCollection<AllowedUser>>(
+                    [.. AllowedUsers.Where(x => includeDeleted || x.DeletedUtc is null)]
+                );
+            }
+
+            public Task<int> CountActiveAdministratorsAsync(CancellationToken ct)
+            {
+                return Task.FromResult(
+                    AllowedUsers.Count(x =>
+                        x.Role == AllowedUserRole.Admin && x.DeletedUtc is null
+                    )
+                );
+            }
+
+            public Task AddAllowedUserAsync(AllowedUser user, CancellationToken ct)
+            {
+                AllowedUsers.Add(user);
+                return Task.CompletedTask;
+            }
+
+            public Task UpdateAllowedUserAsync(AllowedUser user, CancellationToken ct)
+            {
+                return Task.CompletedTask;
+            }
+
+            public Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(
+                Guid userId,
+                Guid? templateId,
+                DateTimeOffset? fromUtc,
+                DateTimeOffset? toUtc,
+                int page,
+                int pageSize,
+                CancellationToken ct
+            )
+            {
+                var readings = Readings
+                    .Where(x =>
+                        x.UserId == userId
+                        && x.DeletedUtc is null
+                        && (!templateId.HasValue || x.TemplateId == templateId)
+                        && (!fromUtc.HasValue || x.RecordedAtUtc >= fromUtc)
+                        && (!toUtc.HasValue || x.RecordedAtUtc <= toUtc)
+                    )
+                    .OrderByDescending(x => x.RecordedAtUtc)
+                    .ToArray();
+                var skip = (long)(page - 1) * pageSize;
+                IReadOnlyCollection<HealthReading> items = skip >= readings.Length
+                    ? []
+                    : [.. readings.Skip((int)skip).Take(pageSize)];
+                return Task.FromResult((items, readings.Length));
             }
 
             public Task UpdateReadingAsync(HealthReading reading, CancellationToken ct)

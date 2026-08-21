@@ -1,4 +1,7 @@
 {
   "ConnectionStrings": { "HealthTracker": "Data Source=healthtracker.db" },
-  "Authentication": { "OpenIdConnect": { "Authority": "", "ClientId": "", "ClientSecret": "", "CallbackPath": "/signin-oidc", "Scopes": [ "openid", "profile", "email" ] } }
+  "Authentication": {
+    "Development": { "Email": "developer@healthpulse.local" },
+    "OpenIdConnect": { "Authority": "", "ClientId": "", "ClientSecret": "", "CallbackPath": "/signin-oidc", "Scopes": [ "openid", "profile", "email" ] }
+  }
 }

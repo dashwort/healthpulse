@@ -8,6 +8,7 @@ namespace HealthTracker.Infrastructure.Persistence
         : DbContext(options)
     {
         public DbSet<UserRecord> Users => Set<UserRecord>();
+        public DbSet<AllowedUserRecord> AllowedUsers => Set<AllowedUserRecord>();
         public DbSet<TemplateRecord> Templates => Set<TemplateRecord>();
         public DbSet<TrackedTemplateRecord> TrackedTemplates => Set<TrackedTemplateRecord>();
         public DbSet<ReadingRecord> Readings => Set<ReadingRecord>();
@@ -28,6 +29,33 @@ namespace HealthTracker.Infrastructure.Persistence
                         v => new DateTimeOffset(v, TimeSpan.Zero)
                     )
                     .HasColumnType("INTEGER");
+            });
+            modelBuilder.Entity<AllowedUserRecord>(entity =>
+            {
+                entity.ToTable("AllowedUsers");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Email).HasMaxLength(320).IsRequired();
+                entity.Property(x => x.NormalizedEmail).HasMaxLength(320).IsRequired();
+                entity.Property(x => x.Role).HasMaxLength(20).IsRequired();
+                entity.HasIndex(x => x.NormalizedEmail).IsUnique();
+                entity.HasIndex(x => new { x.Role, x.DeletedUtc });
+
+                entity.Property(x => x.CreatedUtc).HasConversion(
+                    v => v.UtcTicks,
+                    v => new DateTimeOffset(v, TimeSpan.Zero)
+                ).HasColumnType("INTEGER");
+                entity.Property(x => x.FirstSignedInUtc).HasConversion(
+                    v => v.HasValue ? v.Value.UtcTicks : (long?)null,
+                    v => v.HasValue ? new DateTimeOffset(v.Value, TimeSpan.Zero) : (DateTimeOffset?)null
+                ).HasColumnType("INTEGER");
+                entity.Property(x => x.LastSignedInUtc).HasConversion(
+                    v => v.HasValue ? v.Value.UtcTicks : (long?)null,
+                    v => v.HasValue ? new DateTimeOffset(v.Value, TimeSpan.Zero) : (DateTimeOffset?)null
+                ).HasColumnType("INTEGER");
+                entity.Property(x => x.DeletedUtc).HasConversion(
+                    v => v.HasValue ? v.Value.UtcTicks : (long?)null,
+                    v => v.HasValue ? new DateTimeOffset(v.Value, TimeSpan.Zero) : (DateTimeOffset?)null
+                ).HasColumnType("INTEGER");
             });
             modelBuilder.Entity<TemplateRecord>(entity =>
             {
