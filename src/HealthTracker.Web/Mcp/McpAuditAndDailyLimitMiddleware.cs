@@ -232,10 +232,7 @@ namespace HealthTracker.Web.Mcp
         {
             public DateTimeOffset StartUtc { get; set; } = startUtc;
 
-            public int RequestCount
-            {
-                get; set;
-            }
+            public int RequestCount { get; set; }
         }
     }
 }

@@ -44,51 +44,30 @@ namespace HealthTracker.Web.Models
     public sealed class ReadingRequest
     {
         [Required]
-        public Guid TemplateId
-        {
-            get; init;
-        }
+        public Guid TemplateId { get; init; }
 
         [Range(0, 1_000_000)]
-        public decimal Value
-        {
-            get; init;
-        }
+        public decimal Value { get; init; }
 
         [Required, StringLength(30)]
         public string Unit { get; init; } = string.Empty;
-        public DateTimeOffset RecordedAtUtc
-        {
-            get; init;
-        }
+        public DateTimeOffset RecordedAtUtc { get; init; }
 
         [StringLength(140)]
-        public string? Note
-        {
-            get; init;
-        }
+        public string? Note { get; init; }
     }
 
     public sealed class UpdateReadingRequest
     {
         [Range(0, 1_000_000)]
-        public decimal Value
-        {
-            get; init;
-        }
+        public decimal Value { get; init; }
 
         [Required, StringLength(30)]
         public string Unit { get; init; } = string.Empty;
-        public DateTimeOffset RecordedAtUtc
-        {
-            get; init;
-        }
+        public DateTimeOffset RecordedAtUtc { get; init; }
 
         [StringLength(140)]
-        public string? Note
-        {
-            get; init;
-        }
+        public string? Note { get; init; }
     }
 
     public sealed record ReadingResponse(

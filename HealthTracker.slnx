@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/HealthTracker.Application/HealthTracker.Application.csproj" />
     <Project Path="src/HealthTracker.Domain/HealthTracker.Domain.csproj" />
+    <Project Path="src/HealthTracker.Analyzers/HealthTracker.Analyzers.csproj" />
     <Project Path="src/HealthTracker.Infrastructure/HealthTracker.Infrastructure.csproj" />
     <Project Path="src/HealthTracker.Web/HealthTracker.Web.csproj" />
   </Folder>
