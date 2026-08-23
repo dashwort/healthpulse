@@ -55,7 +55,20 @@ ghcr.io/dashwort/healthpulse:latest
 ghcr.io/dashwort/healthpulse:sha-<commit>
 ```
 
-The container listens on port `8080`. Supply production OIDC settings through environment variables such as `Authentication__OpenIdConnect__Authority`, `Authentication__OpenIdConnect__ClientId`, and `Authentication__OpenIdConnect__ClientSecret`; environment variables override the JSON defaults. For Google, use `https://accounts.google.com` as the authority and register `http://localhost:8081/signin-oidc` for local OAuth testing (or the equivalent public HTTPS callback). Mount durable storage at `/app/App_Data` to retain the SQLite database and ASP.NET Core data-protection keys across container replacements.
+The container listens on port `8080`. The image declares every production-required application setting as an environment variable; credential and administrator values are intentionally empty and must be supplied at runtime. Environment variables override the JSON defaults.
+
+Required application settings:
+
+- `ConnectionStrings__HealthTracker` (the image provides the SQLite default shown below)
+- `Authentication__OpenIdConnect__Authority`
+- `Authentication__OpenIdConnect__ClientId`
+- `Authentication__OpenIdConnect__ClientSecret`
+
+Required on the first start of an empty database:
+
+- `AccessControl__InitialAdministratorEmail`
+
+The image supplies `ConnectionStrings__HealthTracker=Data Source=/app/App_Data/healthtracker.db`, `ASPNETCORE_ENVIRONMENT=Production`, and `ASPNETCORE_HTTP_PORTS=8080` as safe defaults. `Authentication__OpenIdConnect__CallbackPath` defaults to `/signin-oidc`, and the default scopes are `openid`, `profile`, and `email`; these can also be overridden with the corresponding variables shown in `.env.example`. For Google, use `https://accounts.google.com` as the authority and register `http://localhost:8081/signin-oidc` for local OAuth testing (or the equivalent public HTTPS callback). Mount durable storage at `/app/App_Data` to retain the SQLite database and ASP.NET Core data-protection keys across container replacements.
 
 Create future migrations with the EF Core 10 tool:
 
