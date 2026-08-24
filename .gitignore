@@ -8,3 +8,7 @@ obj/
 src/HealthTracker.Web/settings.Development.json
 src/HealthTracker.Web/App_Data/
 .env
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties

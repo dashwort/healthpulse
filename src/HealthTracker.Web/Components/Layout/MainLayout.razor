@@ -6,13 +6,37 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudLayout>
-<MudAppBar Color="MudBlazor.Color.Primary" Elevation="1"><MudText Typo="Typo.h6">HealthPulse</MudText><MudSpacer /><MudIconButton Icon="@(isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" aria-label="Toggle colour theme" OnClick="ToggleThemeAsync" /><AuthorizeView><Authorized><form method="post" action="/logout" data-enhance="false" class="d-inline"><AntiforgeryToken /><MudButton ButtonType="MudBlazor.ButtonType.Submit" Variant="Variant.Text" Color="MudBlazor.Color.Inherit">Sign out</MudButton></form></Authorized><NotAuthorized><MudButton Href="/login" Variant="Variant.Text" Color="MudBlazor.Color.Inherit">Sign in</MudButton></NotAuthorized></AuthorizeView></MudAppBar>
-    <MudDrawer Open="true" Variant="DrawerVariant.Responsive" Elevation="1"><MudNavMenu><MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink><MudNavLink Href="/templates" Icon="@Icons.Material.Filled.Tune">Templates</MudNavLink><MudNavLink Href="/readings" Icon="@Icons.Material.Filled.MonitorHeart">Readings</MudNavLink><MudNavLink Href="/tokens" Icon="@Icons.Material.Filled.Key">Access tokens</MudNavLink><AuthorizeView Policy="Administrator"><Authorized><MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group">User management</MudNavLink></Authorized></AuthorizeView></MudNavMenu></MudDrawer>
+    <MudAppBar Color="MudBlazor.Color.Primary" Elevation="1">
+        <MudIconButton Class="mobile-menu-button" Icon="@(drawerOpen ? Icons.Material.Filled.Close : Icons.Material.Filled.Menu)" aria-label="@(drawerOpen ? "Close navigation menu" : "Open navigation menu")" OnClick="ToggleDrawer" />
+        <MudText Typo="Typo.h6">HealthPulse</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@(isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" aria-label="Toggle colour theme" OnClick="ToggleThemeAsync" />
+        <AuthorizeView>
+            <Authorized>
+                <form method="post" action="/logout" data-enhance="false" class="d-inline">
+                    <AntiforgeryToken />
+                    <MudButton ButtonType="MudBlazor.ButtonType.Submit" Variant="Variant.Text" Color="MudBlazor.Color.Inherit">Sign out</MudButton>
+                </form>
+            </Authorized>
+            <NotAuthorized><MudButton Href="/login" Variant="Variant.Text" Color="MudBlazor.Color.Inherit">Sign in</MudButton></NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+    <MudDrawer @bind-Open="drawerOpen" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md" Elevation="1">
+        <MudNavMenu Class="navigation-menu">
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" OnClick="CloseDrawer">Dashboard</MudNavLink>
+            <MudNavLink Href="/templates" Icon="@Icons.Material.Filled.Tune" OnClick="CloseDrawer">Templates</MudNavLink>
+            <MudNavLink Href="/readings" Icon="@Icons.Material.Filled.MonitorHeart" OnClick="CloseDrawer">Readings</MudNavLink>
+            <MudNavLink Href="/tokens" Icon="@Icons.Material.Filled.Key" OnClick="CloseDrawer">Access tokens</MudNavLink>
+            <AuthorizeView Policy="Administrator"><Authorized><MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group" OnClick="CloseDrawer">User management</MudNavLink></Authorized></AuthorizeView>
+        </MudNavMenu>
+    </MudDrawer>
     <MudMainContent Class="pa-6 mt-12">@Body</MudMainContent>
 </MudLayout>
 
 @code {
     private bool isDarkMode;
+    private bool isMobile;
+    private bool drawerOpen = true;
     private readonly MudTheme theme = new()
     {
         PaletteLight = new PaletteLight { Primary = "#2563eb", Secondary = "#0f766e", Background = "#f7f9fc", AppbarBackground = "#ffffff" },
@@ -24,8 +48,13 @@
         if (!firstRender) return;
         var saved = await JS.InvokeAsync<string?>("healthTrackerTheme.get");
         isDarkMode = saved is null ? await JS.InvokeAsync<bool>("healthTrackerTheme.prefersDark") : saved == "dark";
+        isMobile = await JS.InvokeAsync<bool>("healthTrackerTheme.isMobile");
+        drawerOpen = !isMobile;
         StateHasChanged();
     }
+
+    private void ToggleDrawer() => drawerOpen = !drawerOpen;
+    private void CloseDrawer() { if (isMobile) drawerOpen = false; }
 
     private async Task ToggleThemeAsync()
     {

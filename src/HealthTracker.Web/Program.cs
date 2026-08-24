@@ -45,10 +45,17 @@ builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
     .WithTools<HealthTracker.Web.Mcp.HealthPulseMcpTools>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<MobileReleaseService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.github.com/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 builder.Services.AddScoped<AccessControlAuthorizationHandler>();
 builder.Services.AddScoped<HealthTrackerService>();
 builder.Services.AddScoped<PersonalAccessTokenService>();
+builder.Services.AddScoped<MobileAuthenticationService>();
 builder.Services.AddMudServices();
 builder.Services.AddHostedService<SoftDeletionPurgeService>();
 builder.Services.AddApexCharts();
@@ -144,20 +151,36 @@ else
 }
 builder.Services.AddAuthorization(options =>
 {
-    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+    var interactiveAuthenticationScheme = usesDevelopmentAuthentication
+        ? "Development"
+        : CookieAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultPolicy = new AuthorizationPolicyBuilder(
+            interactiveAuthenticationScheme,
+            "MobileBearer"
+        )
         .RequireAuthenticatedUser()
         .AddRequirements(new ActiveAllowedUserRequirement())
         .Build();
     options.AddPolicy(
+        "InteractiveUser",
+        policy =>
+            policy
+                .AddAuthenticationSchemes(interactiveAuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .AddRequirements(new ActiveAllowedUserRequirement())
+    );
+    options.AddPolicy(
         "Administrator",
         policy =>
             policy
+                .AddAuthenticationSchemes(interactiveAuthenticationScheme, "MobileBearer")
                 .RequireAuthenticatedUser()
                 .AddRequirements(new ActiveAllowedUserRequirement(), new AdministratorRequirement())
     );
 });
 builder.Services.AddAuthentication()
-    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, PersonalAccessTokenAuthenticationHandler>("PersonalAccessToken", _ => { });
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, PersonalAccessTokenAuthenticationHandler>("PersonalAccessToken", _ => { })
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, MobileBearerAuthenticationHandler>("MobileBearer", _ => { });
 builder.Services.AddScoped<IAuthorizationHandler>(
     serviceProvider => serviceProvider.GetRequiredService<AccessControlAuthorizationHandler>()
 );
@@ -215,6 +238,26 @@ else
         .WithMetadata(new RequireAntiforgeryTokenAttribute(true));
 }
 app.MapStaticAssets();
+app.MapGet(
+    "/.well-known/healthpulse-mobile",
+    (HttpRequest request) =>
+        Results.Ok(
+            new
+            {
+                product = "HealthPulse",
+                apiVersion = 1,
+                apiBaseUrl = $"{request.Scheme}://{request.Host}",
+                authorizationEndpoint = "/api/mobile/auth/authorize",
+                tokenEndpoint = "/api/mobile/auth/token",
+                updateEndpoint = "/.well-known/healthpulse-android-update",
+            }
+        )
+).AllowAnonymous();
+app.MapGet(
+    "/.well-known/healthpulse-android-update",
+    async (MobileReleaseService mobileReleaseService, CancellationToken cancellationToken) =>
+        Results.Ok(await mobileReleaseService.GetLatestAsync(cancellationToken))
+).AllowAnonymous();
 app.MapControllers();
 app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = "PersonalAccessToken" });
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

@@ -12,9 +12,24 @@
     z-index: 1000;
 }
 
-    #blazor-error-ui .dismiss {
+#blazor-error-ui .dismiss {
         cursor: pointer;
         position: absolute;
         right: 0.75rem;
         top: 0.5rem;
     }
+
+.mud-icon-button.mobile-menu-button {
+    display: none;
+}
+
+.navigation-menu {
+    padding: .75rem .5rem;
+}
+
+@media (max-width: 959.98px) {
+    .mud-icon-button.mobile-menu-button {
+        display: inline-flex;
+        margin-right: .25rem;
+    }
+}

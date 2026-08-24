@@ -187,5 +187,91 @@ namespace HealthTracker.Infrastructure.Persistence.Mappings
             target.RecordedAtUtc = source.RecordedAtUtc;
             target.DeletedUtc = source.DeletedUtc;
         }
+
+        public static MobileAuthorizationRequest ToDomain(
+            this MobileAuthorizationRequestRecord record
+        )
+        {
+            return new()
+            {
+                Id = record.Id,
+                CodeChallenge = record.CodeChallenge,
+                State = record.State,
+                RedirectUri = record.RedirectUri,
+                CreatedUtc = record.CreatedUtc,
+                ExpiresUtc = record.ExpiresUtc,
+                ApplicationUserId = record.ApplicationUserId,
+                AuthorizationCodeHash = record.AuthorizationCodeHash,
+                AuthorizationCodeExpiresUtc = record.AuthorizationCodeExpiresUtc,
+                ConsumedUtc = record.ConsumedUtc,
+            };
+        }
+
+        public static MobileAuthorizationRequestRecord ToRecord(this MobileAuthorizationRequest request)
+        {
+            return new()
+            {
+                Id = request.Id,
+                CodeChallenge = request.CodeChallenge,
+                State = request.State,
+                RedirectUri = request.RedirectUri,
+                CreatedUtc = request.CreatedUtc,
+                ExpiresUtc = request.ExpiresUtc,
+                ApplicationUserId = request.ApplicationUserId,
+                AuthorizationCodeHash = request.AuthorizationCodeHash,
+                AuthorizationCodeExpiresUtc = request.AuthorizationCodeExpiresUtc,
+                ConsumedUtc = request.ConsumedUtc,
+            };
+        }
+
+        public static void Apply(this MobileAuthorizationRequest source, MobileAuthorizationRequestRecord target)
+        {
+            target.ApplicationUserId = source.ApplicationUserId;
+            target.AuthorizationCodeHash = source.AuthorizationCodeHash;
+            target.AuthorizationCodeExpiresUtc = source.AuthorizationCodeExpiresUtc;
+            target.ConsumedUtc = source.ConsumedUtc;
+        }
+
+        public static MobileSession ToDomain(this MobileSessionRecord record)
+        {
+            return new()
+            {
+                Id = record.Id,
+                ApplicationUserId = record.ApplicationUserId,
+                AccessTokenHash = record.AccessTokenHash,
+                AccessTokenExpiresUtc = record.AccessTokenExpiresUtc,
+                RefreshTokenHash = record.RefreshTokenHash,
+                RefreshTokenExpiresUtc = record.RefreshTokenExpiresUtc,
+                CreatedUtc = record.CreatedUtc,
+                LastUsedUtc = record.LastUsedUtc,
+                RevokedUtc = record.RevokedUtc,
+            };
+        }
+
+        public static MobileSessionRecord ToRecord(this MobileSession session)
+        {
+            return new()
+            {
+                Id = session.Id,
+                ApplicationUserId = session.ApplicationUserId,
+                AccessTokenHash = session.AccessTokenHash,
+                AccessTokenExpiresUtc = session.AccessTokenExpiresUtc,
+                RefreshTokenHash = session.RefreshTokenHash,
+                RefreshTokenExpiresUtc = session.RefreshTokenExpiresUtc,
+                CreatedUtc = session.CreatedUtc,
+                LastUsedUtc = session.LastUsedUtc,
+                RevokedUtc = session.RevokedUtc,
+            };
+        }
+
+        public static void Apply(this MobileSession source, MobileSessionRecord target)
+        {
+            target.AccessTokenHash = source.AccessTokenHash;
+            target.AccessTokenExpiresUtc = source.AccessTokenExpiresUtc;
+            target.RefreshTokenHash = source.RefreshTokenHash;
+            target.RefreshTokenExpiresUtc = source.RefreshTokenExpiresUtc;
+            target.LastUsedUtc = source.LastUsedUtc;
+            target.RevokedUtc = source.RevokedUtc;
+        }
     }
 }

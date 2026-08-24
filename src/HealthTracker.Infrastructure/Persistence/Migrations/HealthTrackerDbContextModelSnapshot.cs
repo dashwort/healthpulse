@@ -97,6 +97,101 @@ namespace HealthTracker.Infrastructure.Persistence.Migrations
                     b.ToTable("McpAuditLogs", (string)null);
                 });
 
+            modelBuilder.Entity("HealthTracker.Infrastructure.Persistence.Models.MobileAuthorizationRequestRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ApplicationUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("AuthorizationCodeExpiresUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AuthorizationCodeHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CodeChallenge")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ConsumedUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorizationCodeHash")
+                        .IsUnique();
+
+                    b.ToTable("MobileAuthorizationRequests", (string)null);
+                });
+
+            modelBuilder.Entity("HealthTracker.Infrastructure.Persistence.Models.MobileSessionRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AccessTokenExpiresUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AccessTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ApplicationUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastUsedUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RefreshTokenExpiresUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RefreshTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RevokedUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccessTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("RefreshTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("ApplicationUserId", "RevokedUtc");
+
+                    b.ToTable("MobileSessions", (string)null);
+                });
+
             modelBuilder.Entity("HealthTracker.Infrastructure.Persistence.Models.PersonalAccessTokenRecord", b =>
                 {
                     b.Property<Guid>("Id")

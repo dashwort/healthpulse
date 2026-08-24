@@ -70,6 +70,31 @@ Required on the first start of an empty database:
 
 The image supplies `ConnectionStrings__HealthTracker=Data Source=/app/App_Data/healthtracker.db`, `ASPNETCORE_ENVIRONMENT=Production`, and `ASPNETCORE_HTTP_PORTS=8080` as safe defaults. `Authentication__OpenIdConnect__CallbackPath` defaults to `/signin-oidc`, and the default scopes are `openid`, `profile`, and `email`; these can also be overridden with the corresponding variables shown in `.env.example`. For Google, use `https://accounts.google.com` as the authority and register `http://localhost:8081/signin-oidc` for local OAuth testing (or the equivalent public HTTPS callback). Mount durable storage at `/app/App_Data` to retain the SQLite database and ASP.NET Core data-protection keys across container replacements.
 
+### Android releases
+
+Tag a release commit as `android-v<major>.<minor>.<patch>` (for example, `android-v1.0.0`). The **Android release** GitHub Actions workflow validates the Android project, builds a signed release APK, verifies its signature, and uploads it as a GitHub Release asset named `HealthPulse-<version>.apk`. It also preserves the APK as a workflow artifact.
+
+The workflow requires these GitHub Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64` — base64-encoded release keystore.
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+The workflow derives a monotonically increasing Android version code from the three-part version: `major * 1,000,000 + minor * 1,000 + patch`. Do not reuse or lower a released version.
+
+The production container does not contain APK files. By default, the deployed application checks the latest public GitHub release for \`dashwort/healthpulse\` and advertises its \`HealthPulse-<version>.apk\` asset automatically. It caches that lookup for five minutes, so no deployment configuration needs to change for an ordinary Android release.
+
+Set \`Mobile__Android__ReleaseRepository\` when you publish from a fork or another repository. The following optional settings override automatic discovery, which is useful for private or self-hosted APK distribution:
+
+```text
+Mobile__Android__LatestVersion=1.0.0
+Mobile__Android__ApkUrl=https://github.com/dashwort/healthpulse/releases/download/android-v1.0.0/HealthPulse-1.0.0.apk
+Mobile__Android__ReleaseNotes=What's new in this release
+```
+
+The Android app checks this information at `/.well-known/healthpulse-android-update` and opens the configured URL in the device download flow. This keeps APK assets immutable and separate from the web container image.
+
 Create future migrations with the EF Core 10 tool:
 
 ```powershell

@@ -44,6 +44,33 @@ namespace HealthTracker.Infrastructure.Persistence.Models
         public DateTimeOffset OccurredUtc { get; set; }
     }
 
+    public sealed class MobileAuthorizationRequestRecord
+    {
+        public Guid Id { get; set; }
+        public string CodeChallenge { get; set; } = string.Empty;
+        public string State { get; set; } = string.Empty;
+        public string RedirectUri { get; set; } = string.Empty;
+        public DateTimeOffset CreatedUtc { get; set; }
+        public DateTimeOffset ExpiresUtc { get; set; }
+        public Guid? ApplicationUserId { get; set; }
+        public string? AuthorizationCodeHash { get; set; }
+        public DateTimeOffset? AuthorizationCodeExpiresUtc { get; set; }
+        public DateTimeOffset? ConsumedUtc { get; set; }
+    }
+
+    public sealed class MobileSessionRecord
+    {
+        public Guid Id { get; set; }
+        public Guid ApplicationUserId { get; set; }
+        public string AccessTokenHash { get; set; } = string.Empty;
+        public DateTimeOffset AccessTokenExpiresUtc { get; set; }
+        public string RefreshTokenHash { get; set; } = string.Empty;
+        public DateTimeOffset RefreshTokenExpiresUtc { get; set; }
+        public DateTimeOffset CreatedUtc { get; set; }
+        public DateTimeOffset? LastUsedUtc { get; set; }
+        public DateTimeOffset? RevokedUtc { get; set; }
+    }
+
     public sealed class TemplateRecord
     {
         public Guid Id { get; set; }

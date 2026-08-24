@@ -13,6 +13,15 @@ namespace HealthTracker.Application.Services
         {
             return dataStore.ExecuteInTransactionAsync(operation, ct);
         }
+
+        /// <summary>
+        /// Resolves the authenticated subject to the application's user record.
+        /// Browser and mobile adapters use this to keep the allow-list and ownership rules identical.
+        /// </summary>
+        public Task<ApplicationUser> EnsureCurrentUserAsync(CancellationToken ct)
+        {
+            return GetCurrentUserAsync(ct);
+        }
         public async Task<IReadOnlyCollection<AllowedUserDto>> GetAllowedUsersAsync(
             bool includeArchived,
             CancellationToken ct

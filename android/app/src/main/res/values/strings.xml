@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">HealthPulse</string>
+    <string name="notification_channel_name">Reading reminders</string>
+</resources>

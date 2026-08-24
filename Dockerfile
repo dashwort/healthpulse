@@ -25,7 +25,11 @@ ENV ASPNETCORE_ENVIRONMENT=Production \
     AccessControl__InitialAdministratorEmail="" \
     Authentication__OpenIdConnect__Authority="" \
     Authentication__OpenIdConnect__ClientId="" \
-    Authentication__OpenIdConnect__ClientSecret=""
+    Authentication__OpenIdConnect__ClientSecret="" \
+    Mobile__Android__LatestVersion="" \
+    Mobile__Android__ApkUrl="" \
+    Mobile__Android__ReleaseNotes="" \
+    Mobile__Android__ReleaseRepository="dashwort/healthpulse"
 EXPOSE 8080
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "HealthTracker.Web.dll"]

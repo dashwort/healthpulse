@@ -283,6 +283,80 @@ namespace HealthTracker.Infrastructure.Persistence
             return logs.Count;
         }
 
+        public Task AddMobileAuthorizationRequestAsync(
+            MobileAuthorizationRequest request,
+            CancellationToken ct
+        )
+        {
+            return db.MobileAuthorizationRequests.AddAsync(request.ToRecord(), ct).AsTask();
+        }
+
+        public async Task<MobileAuthorizationRequest?> GetMobileAuthorizationRequestAsync(
+            Guid requestId,
+            CancellationToken ct
+        )
+        {
+            return (await db.MobileAuthorizationRequests.SingleOrDefaultAsync(x => x.Id == requestId, ct))
+                ?.ToDomain();
+        }
+
+        public async Task<MobileAuthorizationRequest?> FindMobileAuthorizationRequestByCodeHashAsync(
+            string authorizationCodeHash,
+            CancellationToken ct
+        )
+        {
+            return (
+                await db.MobileAuthorizationRequests.SingleOrDefaultAsync(
+                    x => x.AuthorizationCodeHash == authorizationCodeHash,
+                    ct
+                )
+            )?.ToDomain();
+        }
+
+        public async Task UpdateMobileAuthorizationRequestAsync(
+            MobileAuthorizationRequest request,
+            CancellationToken ct
+        )
+        {
+            var record = await db.MobileAuthorizationRequests.SingleAsync(x => x.Id == request.Id, ct);
+            request.Apply(record);
+        }
+
+        public Task AddMobileSessionAsync(MobileSession session, CancellationToken ct)
+        {
+            return db.MobileSessions.AddAsync(session.ToRecord(), ct).AsTask();
+        }
+
+        public async Task<MobileSession?> FindActiveMobileSessionByAccessHashAsync(
+            string accessTokenHash,
+            CancellationToken ct
+        )
+        {
+            var session = await db.MobileSessions.SingleOrDefaultAsync(
+                x => x.AccessTokenHash == accessTokenHash && x.RevokedUtc == null,
+                ct
+            );
+            return session is null ? null : session.ToDomain();
+        }
+
+        public async Task<MobileSession?> FindActiveMobileSessionByRefreshHashAsync(
+            string refreshTokenHash,
+            CancellationToken ct
+        )
+        {
+            var session = await db.MobileSessions.SingleOrDefaultAsync(
+                x => x.RefreshTokenHash == refreshTokenHash && x.RevokedUtc == null,
+                ct
+            );
+            return session is null ? null : session.ToDomain();
+        }
+
+        public async Task UpdateMobileSessionAsync(MobileSession session, CancellationToken ct)
+        {
+            var record = await db.MobileSessions.SingleAsync(x => x.Id == session.Id, ct);
+            session.Apply(record);
+        }
+
         public async Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(
             Guid userId,
             Guid? templateId,

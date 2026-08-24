@@ -262,6 +262,8 @@ namespace HealthTracker.Application.Tests
             public List<ApplicationUser> Users { get; } = [];
             public List<PersonalAccessToken> Tokens { get; } = [];
             public List<McpAuditLog> AuditLogs { get; } = [];
+            public List<MobileAuthorizationRequest> MobileAuthorizationRequests { get; } = [];
+            public List<MobileSession> MobileSessions { get; } = [];
 
             public Task<ApplicationUser?> FindUserBySubjectAsync(
                 string subject,
@@ -456,6 +458,26 @@ namespace HealthTracker.Application.Tests
             public Task UpdateMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct) => Task.CompletedTask;
             public Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken ct) => Task.FromResult(AuditLogs.Count(x => x.PersonalAccessTokenId == tokenId && x.OccurredUtc >= sinceUtc));
             public Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken ct) => Task.FromResult(0);
+            public Task AddMobileAuthorizationRequestAsync(MobileAuthorizationRequest request, CancellationToken ct)
+            {
+                MobileAuthorizationRequests.Add(request);
+                return Task.CompletedTask;
+            }
+            public Task<MobileAuthorizationRequest?> GetMobileAuthorizationRequestAsync(Guid requestId, CancellationToken ct) =>
+                Task.FromResult<MobileAuthorizationRequest?>(MobileAuthorizationRequests.SingleOrDefault(x => x.Id == requestId));
+            public Task<MobileAuthorizationRequest?> FindMobileAuthorizationRequestByCodeHashAsync(string authorizationCodeHash, CancellationToken ct) =>
+                Task.FromResult<MobileAuthorizationRequest?>(MobileAuthorizationRequests.SingleOrDefault(x => x.AuthorizationCodeHash == authorizationCodeHash));
+            public Task UpdateMobileAuthorizationRequestAsync(MobileAuthorizationRequest request, CancellationToken ct) => Task.CompletedTask;
+            public Task AddMobileSessionAsync(MobileSession session, CancellationToken ct)
+            {
+                MobileSessions.Add(session);
+                return Task.CompletedTask;
+            }
+            public Task<MobileSession?> FindActiveMobileSessionByAccessHashAsync(string accessTokenHash, CancellationToken ct) =>
+                Task.FromResult<MobileSession?>(MobileSessions.SingleOrDefault(x => x.AccessTokenHash == accessTokenHash && x.RevokedUtc is null));
+            public Task<MobileSession?> FindActiveMobileSessionByRefreshHashAsync(string refreshTokenHash, CancellationToken ct) =>
+                Task.FromResult<MobileSession?>(MobileSessions.SingleOrDefault(x => x.RefreshTokenHash == refreshTokenHash && x.RevokedUtc is null));
+            public Task UpdateMobileSessionAsync(MobileSession session, CancellationToken ct) => Task.CompletedTask;
 
             public Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(
                 Guid userId,

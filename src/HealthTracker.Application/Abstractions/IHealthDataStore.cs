@@ -36,6 +36,32 @@ namespace HealthTracker.Application.Abstractions
         Task UpdateMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken cancellationToken);
         Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken cancellationToken);
         Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken cancellationToken);
+        Task AddMobileAuthorizationRequestAsync(
+            MobileAuthorizationRequest request,
+            CancellationToken cancellationToken
+        );
+        Task<MobileAuthorizationRequest?> GetMobileAuthorizationRequestAsync(
+            Guid requestId,
+            CancellationToken cancellationToken
+        );
+        Task<MobileAuthorizationRequest?> FindMobileAuthorizationRequestByCodeHashAsync(
+            string authorizationCodeHash,
+            CancellationToken cancellationToken
+        );
+        Task UpdateMobileAuthorizationRequestAsync(
+            MobileAuthorizationRequest request,
+            CancellationToken cancellationToken
+        );
+        Task AddMobileSessionAsync(MobileSession session, CancellationToken cancellationToken);
+        Task<MobileSession?> FindActiveMobileSessionByAccessHashAsync(
+            string accessTokenHash,
+            CancellationToken cancellationToken
+        );
+        Task<MobileSession?> FindActiveMobileSessionByRefreshHashAsync(
+            string refreshTokenHash,
+            CancellationToken cancellationToken
+        );
+        Task UpdateMobileSessionAsync(MobileSession session, CancellationToken cancellationToken);
         Task<IReadOnlyCollection<MeasurementTemplate>> GetCatalogueAsync(
             Guid userId,
             CancellationToken cancellationToken

@@ -11,6 +11,9 @@ namespace HealthTracker.Infrastructure.Persistence
         public DbSet<AllowedUserRecord> AllowedUsers => Set<AllowedUserRecord>();
         public DbSet<PersonalAccessTokenRecord> PersonalAccessTokens => Set<PersonalAccessTokenRecord>();
         public DbSet<McpAuditLogRecord> McpAuditLogs => Set<McpAuditLogRecord>();
+        public DbSet<MobileAuthorizationRequestRecord> MobileAuthorizationRequests =>
+            Set<MobileAuthorizationRequestRecord>();
+        public DbSet<MobileSessionRecord> MobileSessions => Set<MobileSessionRecord>();
         public DbSet<TemplateRecord> Templates => Set<TemplateRecord>();
         public DbSet<TrackedTemplateRecord> TrackedTemplates => Set<TrackedTemplateRecord>();
         public DbSet<ReadingRecord> Readings => Set<ReadingRecord>();
@@ -82,6 +85,35 @@ namespace HealthTracker.Infrastructure.Persistence
                 entity.HasIndex(x => new { x.PersonalAccessTokenId, x.OccurredUtc });
                 entity.HasIndex(x => new { x.AllowedUserId, x.OccurredUtc });
                 ConfigureUtc(entity.Property(x => x.OccurredUtc));
+            });
+            modelBuilder.Entity<MobileAuthorizationRequestRecord>(entity =>
+            {
+                entity.ToTable("MobileAuthorizationRequests");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.CodeChallenge).HasMaxLength(128).IsRequired();
+                entity.Property(x => x.State).HasMaxLength(512).IsRequired();
+                entity.Property(x => x.RedirectUri).HasMaxLength(500).IsRequired();
+                entity.Property(x => x.AuthorizationCodeHash).HasMaxLength(64);
+                entity.HasIndex(x => x.AuthorizationCodeHash).IsUnique();
+                ConfigureUtc(entity.Property(x => x.CreatedUtc));
+                ConfigureUtc(entity.Property(x => x.ExpiresUtc));
+                ConfigureNullableUtc(entity.Property(x => x.AuthorizationCodeExpiresUtc));
+                ConfigureNullableUtc(entity.Property(x => x.ConsumedUtc));
+            });
+            modelBuilder.Entity<MobileSessionRecord>(entity =>
+            {
+                entity.ToTable("MobileSessions");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.AccessTokenHash).HasMaxLength(64).IsRequired();
+                entity.Property(x => x.RefreshTokenHash).HasMaxLength(64).IsRequired();
+                entity.HasIndex(x => x.AccessTokenHash).IsUnique();
+                entity.HasIndex(x => x.RefreshTokenHash).IsUnique();
+                entity.HasIndex(x => new { x.ApplicationUserId, x.RevokedUtc });
+                ConfigureUtc(entity.Property(x => x.AccessTokenExpiresUtc));
+                ConfigureUtc(entity.Property(x => x.RefreshTokenExpiresUtc));
+                ConfigureUtc(entity.Property(x => x.CreatedUtc));
+                ConfigureNullableUtc(entity.Property(x => x.LastUsedUtc));
+                ConfigureNullableUtc(entity.Property(x => x.RevokedUtc));
             });
             modelBuilder.Entity<TemplateRecord>(entity =>
             {
