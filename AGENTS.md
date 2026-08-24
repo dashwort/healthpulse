@@ -4,9 +4,9 @@ This file is the working guide for contributors and coding agents modifying the 
 
 ## Project overview
 
-HealthPulse is a .NET 10 Blazor Web App with a controller-based REST API for recording personal health readings. It supports built-in and user-created measurement templates, normalized units for built-in measurements, local-time entry/display, UTC persistence, soft deletion, and trend charts.
+HealthPulse is a .NET 10 Blazor Web App with a controller-based REST API and Android companion app for recording personal health readings. It supports built-in and user-created measurement templates, normalized units for built-in measurements, local date/time entry with UTC persistence, backdated readings, offline Android queueing and synchronisation, soft deletion, and trend charts.
 
-The application is strictly user-scoped. There are no administrator roles. A request must never accept a user ID from the UI or trust a user ID supplied by a client; the authenticated subject is resolved by the web adapter and passed through the application current-user port.
+The application is strictly user-scoped, with a small administrator role for allow-list, token, and diagnostics management. A request must never accept a user ID from the UI or trust a user ID supplied by a client; the authenticated subject is resolved by the web adapter and passed through the application current-user port.
 
 ## Repository structure
 
@@ -16,6 +16,7 @@ src/
   HealthTracker.Application/    Use cases, ports, DTOs, mappings, and unit conversion
   HealthTracker.Infrastructure/ EF Core adapter, SQLite mappings, migrations, and seeding
   HealthTracker.Web/             Blazor UI, API controllers, OIDC, hosting, and purge worker
+android/                          Android companion app, offline cache/queue, mobile authentication, and APK build
 tests/
   HealthTracker.Application.Tests/ Application service and unit-conversion tests
 ```
@@ -47,15 +48,23 @@ The internal project and namespace names retain `HealthTracker`; `HealthPulse` i
 
 - The UI uses Blazor Interactive Server rendering, MudBlazor components, and Blazor-ApexCharts.
 - Main pages are Dashboard (`Home.razor`), Readings, and Templates. Keep navigation reachable and responsive at narrow widths.
-- Theme preference follows the system by default and is persisted in browser local storage. MudBlazor and chart palettes should remain visually consistent when changing theme.
-- Reading entry/edit dialogs must validate numeric values, units, timestamps, and note length before saving. User-facing timestamps are local time.
+- The web theme follows the system preference by default, can be toggled, and is persisted in browser local storage. The Android app uses its dark theme. MudBlazor and chart palettes should remain visually consistent when changing the web theme.
+- Reading entry/edit dialogs must validate numeric values, units, timestamps, and note length before saving. Web and Android entry surfaces collect local date/time; the server and API contract persist `DateTimeOffset` values in UTC. Historical dates are allowed, but timestamps more than five minutes in the future are rejected.
 - Charts show one metric at a time in its stored normalized unit and need an explicit empty-data state.
 - Destructive actions require confirmation and should report success/failure through the existing snackbar/dialog patterns rather than uncaught exceptions.
 
+## Android conventions
+
+- The Android app is a companion client for the server API; it must not create a second source of truth for health data.
+- New readings are written to the local cache immediately and queued for `POST /api/readings` when offline. Preserve the queue and visible sync status when changing the client.
+- Android authentication uses the server's PKCE mobile hand-off and bearer sessions. Never log access tokens, refresh tokens, or health-data payloads.
+- Use the device local time zone for entry and display, then send `recordedAtUtc` as an ISO 8601 UTC timestamp.
+- The release workflow is `.github/workflows/android-release.yml`; release tags use `android-v<major>.<minor>.<patch>` and produce a signed `HealthPulse-<version>.apk` GitHub Release asset.
+
 ## Authentication and configuration
 
-- Production authentication uses generic OpenID Connect configured through the web application's configuration binding.
-- HealthPulse is invitation-only: `AccessControl__InitialAdministratorEmail` seeds the first admin when the allow-list is empty. Only active, verified Google emails may access the app; admins manage the allow-list and the final active admin cannot be removed or demoted.
+- Production authentication uses generic OpenID Connect configured through the web application's configuration binding; the documented production provider is Google.
+- HealthPulse is invitation-only: `AccessControl__InitialAdministratorEmail` seeds the first admin when the allow-list is empty. Only active, verified emails from the configured OIDC provider may access the app; production is currently configured for Google. Admins manage the allow-list and the final active admin cannot be removed or demoted.
 - Personal access tokens are user-scoped credentials for the HTTPS `/mcp` Streamable HTTP endpoint. Store only token hashes, never log tokens or health-data arguments, and preserve immediate revocation when users or tokens are archived/revoked.
 - Tokens expire after one year and each user may have at most five active tokens. Administrators can revoke any user's token but must never be able to recover or view its secret.
 - MCP requests inherit the token owner's current role. Members are limited to their own health data; administrator tokens may manage users and tokens. Enforce both limits on every request: 60 calls per minute in process and 1,000 calls per token/day from persisted audit history; return HTTP 429 when a limit is exceeded.
@@ -85,9 +94,20 @@ dotnet test HealthTracker.slnx --no-restore
 dotnet build HealthTracker.slnx --no-restore
 ```
 
-The current automated suite is in `tests/HealthTracker.Application.Tests`. Add tests for application behavior, validation boundaries, normalization, paging/filtering, and ownership isolation when changing those areas.
+For Android changes, set `JAVA_HOME` to a JDK 21 installation (Android Studio's bundled JBR is suitable on Windows), then run:
 
-For UI changes, run the web project and verify navigation, responsive layout, modal validation, theme persistence, CRUD behavior, archive visibility, pagination, and chart rendering in the browser. Avoid leaving multiple app instances running because the executable and referenced assemblies can be locked during a build.
+```powershell
+Push-Location android
+./gradlew.bat test
+./gradlew.bat assembleDebug
+Pop-Location
+```
+
+The debug APK is written under the Gradle build directory configured in `android/app/build.gradle.kts`. For a production-style container check, run `docker build --tag healthpulse:local .`.
+
+The automated .NET suite is in `tests/HealthTracker.Application.Tests`; Android unit tests are in `android/app/src/test`. Add tests for application behavior, validation boundaries, normalization, paging/filtering, ownership isolation, offline queueing, and timestamp conversion when changing those areas.
+
+For UI changes, run the web project and verify navigation, responsive layout, modal validation, local date/time entry including backdated readings, CRUD behavior, archive visibility, pagination, chart rendering, Android sync status, and APK update checks in the browser/device flow. Avoid leaving multiple app instances running because the executable and referenced assemblies can be locked during a build.
 
 ## Change and commit guidance
 

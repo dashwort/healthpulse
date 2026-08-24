@@ -14,6 +14,8 @@ This project is provided for personal tracking and software development purposes
 - `src/HealthTracker.Application` — use cases, DTOs, mappings, normalization, and persistence/user ports.
 - `src/HealthTracker.Infrastructure` — EF Core SQLite adapter, database models/mappings, and migrations.
 - `src/HealthTracker.Web` — Blazor UI, secured API controllers, OIDC adapter, settings, and deletion worker.
+- `android` — Android companion app with offline cache/queue, PKCE sign-in, sync status, trends, reminders, and update checks.
+- `.github/workflows` — server/container CI and signed Android release automation.
 
 Every data-store operation is user-scoped using the trusted OIDC subject. Controllers never accept a user ID, so one user cannot request another user's templates or readings.
 
@@ -24,11 +26,12 @@ Every data-store operation is user-scoped using the trusted OIDC subject. Contro
 - .NET SDK 10.0 or later
 - An OpenID Connect provider for non-development deployments
 
-Clone the public repository and run the web project:
+Clone the public repository and run the web project. On the first start, set an administrator email for the empty local database:
 
 ```powershell
 git clone https://github.com/dashwort/healthpulse.git
 cd healthpulse
+$env:AccessControl__InitialAdministratorEmail = "you@example.com"
 dotnet run --project src/HealthTracker.Web
 ```
 
@@ -87,9 +90,9 @@ The workflow requires these GitHub Actions secrets:
 
 The workflow derives a monotonically increasing Android version code from the three-part version: `major * 1,000,000 + minor * 1,000 + patch`. Do not reuse or lower a released version.
 
-The production container does not contain APK files. By default, the deployed application checks the latest public GitHub release for \`dashwort/healthpulse\` and advertises its \`HealthPulse-<version>.apk\` asset automatically. It caches that lookup for five minutes, so no deployment configuration needs to change for an ordinary Android release.
+The production container does not contain APK files. By default, the deployed application checks the latest public GitHub release for `dashwort/healthpulse` and advertises its `HealthPulse-<version>.apk` asset automatically. It caches that lookup for five minutes, so no deployment configuration needs to change for an ordinary Android release.
 
-Set \`Mobile__Android__ReleaseRepository\` when you publish from a fork or another repository. The following optional settings override automatic discovery, which is useful for private or self-hosted APK distribution:
+Set `Mobile__Android__ReleaseRepository` when you publish from a fork or another repository. The following optional settings override automatic discovery, which is useful for private or self-hosted APK distribution:
 
 ```text
 Mobile__Android__LatestVersion=1.0.0
@@ -107,7 +110,7 @@ dotnet ef migrations add <Name> --project src/HealthTracker.Infrastructure --sta
 
 ## API
 
-All endpoints require authentication.
+The application data API and MCP endpoint require authentication. The mobile discovery document (`/.well-known/healthpulse-mobile`), Android update metadata (`/.well-known/healthpulse-android-update`), and mobile PKCE authorize/token hand-off endpoints are anonymous by design. Health data, templates, tokens, user management, and diagnostics remain protected.
 
 ## MCP access
 
@@ -122,7 +125,7 @@ The endpoint allows 60 calls per minute and 1,000 calls per token per day, retur
 - `POST|PUT|DELETE /api/templates/custom/{templateId?}`
 - `GET|POST /api/readings`, `PUT|DELETE /api/readings/{readingId}`
 
-Reading creation accepts a `recordedAtUtc` timestamp. The web and Android apps provide local date/time selectors; MCP clients should send the measurement date and time as an ISO 8601 UTC timestamp, including a historical timestamp when backdating a reading.
+Reading creation accepts a `recordedAtUtc` timestamp. The web and Android apps provide local date/time selectors; MCP clients should send the measurement date and time as an ISO 8601 UTC timestamp, including a historical timestamp when backdating a reading. Timestamps more than five minutes in the future are rejected; historical timestamps are retained as recorded history.
 
 Built-in templates include urate (normalized to `umol/L`), glucose, HbA1c, lipid measurements, ketones, weight, body fat, waist, temperature, heart rate, oxygen saturation, and separate systolic/diastolic blood pressure. Supported input units are normalized on write for built-in templates. Custom templates preserve their defined unit without conversion.
 
@@ -131,6 +134,17 @@ Deletes are soft deletes. A background worker permanently removes soft-deleted r
 ## Verify locally
 
 ```powershell
-dotnet build HealthTracker.slnx
-dotnet test HealthTracker.slnx
+dotnet restore HealthTracker.slnx
+dotnet test HealthTracker.slnx --no-restore
+dotnet build HealthTracker.slnx --no-restore
+
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+Push-Location android
+./gradlew.bat test
+./gradlew.bat assembleDebug
+Pop-Location
+
+docker build --tag healthpulse:local .
 ```
+
+The Android release workflow runs the Android unit tests and produces signed APKs only for `android-v<major>.<minor>.<patch>` tags or a manually dispatched version. The ordinary `CI` workflow builds/tests the .NET solution and publishes/deploys the production container on pushes to `main`.
