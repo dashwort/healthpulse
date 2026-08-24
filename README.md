@@ -70,7 +70,7 @@ Required on the first start of an empty database:
 
 The image supplies `ConnectionStrings__HealthTracker=Data Source=/app/App_Data/healthtracker.db`, `ASPNETCORE_ENVIRONMENT=Production`, and `ASPNETCORE_HTTP_PORTS=8080` as safe defaults. `Authentication__OpenIdConnect__CallbackPath` defaults to `/signin-oidc`, and the default scopes are `openid`, `profile`, and `email`; these can also be overridden with the corresponding variables shown in `.env.example`. For Google, use `https://accounts.google.com` as the authority and register `http://localhost:8081/signin-oidc` for local OAuth testing (or the equivalent public HTTPS callback). Mount durable storage at `/app/App_Data` to retain the SQLite database and ASP.NET Core data-protection keys across container replacements.
 
-The web app's **App information** page shows the deployed application version, GitHub Actions build number, commit SHA, and UTC build time. CI injects this read-only metadata into each production image; locally built containers show `development` / `local` values.
+The web app's **App information** page shows the deployed application version, GitHub Actions build number, commit SHA, and UTC build time. It also provides a download link for the latest published Android APK. CI injects the deployment metadata into each production image; locally built containers show `development` / `local` values.
 
 ### Android releases
 
