@@ -36,8 +36,8 @@ namespace HealthTracker.Web.Mcp
         [McpServerTool, Description("Lists the current user's readings, optionally filtered by template and UTC date range.")]
         public Task<IReadOnlyCollection<ReadingDto>> ListReadings(Guid? templateId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, CancellationToken ct) => tracker.GetReadingsAsync(templateId, fromUtc, toUtc, ct);
 
-        [McpServerTool, Description("Adds a reading for a template the current user is tracking.")]
-        public Task<ReadingDto> AddReading(Guid templateId, decimal value, string unit, DateTimeOffset recordedAtUtc, string? note, CancellationToken ct) => tracker.CreateReadingAsync(new CreateReadingDto(templateId, value, unit, recordedAtUtc, note), ct);
+        [McpServerTool, Description("Adds a reading for a template the current user is tracking. Set recordedAtUtc to the date and time the measurement was taken, including a historical UTC timestamp when backdating a reading.")]
+        public Task<ReadingDto> AddReading(Guid templateId, decimal value, string unit, [Description("UTC date and time when the measurement was taken. Use a historical ISO 8601 timestamp to backdate a reading.")] DateTimeOffset recordedAtUtc, string? note, CancellationToken ct) => tracker.CreateReadingAsync(new CreateReadingDto(templateId, value, unit, recordedAtUtc, note), ct);
 
         [McpServerTool, Description("Updates a reading owned by the current user.")]
         public Task<ReadingDto> UpdateReading(Guid readingId, decimal value, string unit, DateTimeOffset recordedAtUtc, string? note, CancellationToken ct) => tracker.UpdateReadingAsync(readingId, new UpdateReadingDto(value, unit, recordedAtUtc, note), ct);

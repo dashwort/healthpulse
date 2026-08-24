@@ -48,6 +48,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -62,6 +64,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDialog
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -83,6 +89,8 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -211,8 +219,8 @@ private fun HealthPulseApp(viewModel: HealthPulseViewModel) {
                             Destination.ADD -> AddReadingScreen(
                                 templates = snapshot.trackedTemplates,
                                 onBack = { destination = Destination.HOME },
-                                onSave = { template, value, note ->
-                                    viewModel.addReading(template, value, note, Instant.now())
+                                onSave = { template, value, note, recordedAt ->
+                                    viewModel.addReading(template, value, note, recordedAt)
                                 }
                             )
                             Destination.DETAIL -> selectedReading?.let { reading ->
@@ -458,17 +466,38 @@ private fun TemplatesScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun AddReadingScreen(
     templates: List<HealthTemplate>,
     onBack: () -> Unit,
-    onSave: (HealthTemplate, String, String) -> String?
+    onSave: (HealthTemplate, String, String, Instant) -> String?
 ) {
     var selected by remember(templates) { mutableStateOf(templates.firstOrNull()) }
     var value by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
+    val initialLocalDateTime = remember { LocalDateTime.now() }
+    var selectedDate by remember { mutableStateOf(initialLocalDateTime.toLocalDate()) }
+    var selectedHour by remember { mutableStateOf(initialLocalDateTime.hour) }
+    var selectedMinute by remember { mutableStateOf(initialLocalDateTime.minute) }
     var showTemplates by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
     var submissionError by remember { mutableStateOf<String?>(null) }
-    val validation = selected?.let { AppValidation.reading(value, note, Instant.now()) }
+    val recordedAt = remember(selectedDate, selectedHour, selectedMinute) {
+        selectedDate
+            .atTime(selectedHour, selectedMinute)
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+    }
+    val validation = selected?.let { AppValidation.reading(value, note, recordedAt) }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = selectedDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    )
+    val timePickerState = rememberTimePickerState(
+        initialHour = selectedHour,
+        initialMinute = selectedMinute,
+        is24Hour = true
+    )
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
@@ -511,6 +540,36 @@ private fun AddReadingScreen(
             isError = validation != null && value.isNotBlank()
         )
         Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = { showDatePicker = true },
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(horizontalAlignment = Alignment.Start) {
+                    Text("Date", style = MaterialTheme.typography.labelSmall)
+                    Text(selectedDate.format(DateTimeFormatter.ofPattern("d MMM yyyy")))
+                }
+            }
+            OutlinedButton(
+                onClick = { showTimePicker = true },
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(horizontalAlignment = Alignment.Start) {
+                    Text("Time", style = MaterialTheme.typography.labelSmall)
+                    Text(String.format(java.util.Locale.getDefault(), "%02d:%02d", selectedHour, selectedMinute))
+                }
+            }
+        }
+        Text(
+            "Choose when the reading was taken. Past dates are allowed.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+        Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = note,
             onValueChange = {
@@ -528,13 +587,45 @@ private fun AddReadingScreen(
         Spacer(Modifier.weight(1f))
         Button(
             onClick = {
-                submissionError = onSave(selected!!, value, note)
+                submissionError = onSave(selected!!, value, note, recordedAt)
                 if (submissionError == null) onBack()
             },
             enabled = validation == null,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Save reading")
+        }
+    }
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        selectedDate = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+    if (showTimePicker) {
+        TimePickerDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text("Select time") },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedHour = timePickerState.hour
+                    selectedMinute = timePickerState.minute
+                    showTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Cancel") } }
+        ) {
+            TimePicker(state = timePickerState)
         }
     }
 }

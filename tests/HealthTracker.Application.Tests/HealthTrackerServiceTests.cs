@@ -33,6 +33,31 @@ namespace HealthTracker.Application.Tests
         }
 
         [Fact]
+        public async Task Create_reading_allows_a_historical_timestamp()
+        {
+            var store = new FakeStore();
+            var template = BuiltInTemplates.All.Single(x => x.Code == "glucose");
+            store.Templates.Add(template);
+            store.Trackings.Add(
+                new UserTrackedTemplate
+                {
+                    UserId = store.User.Id,
+                    TemplateId = template.Id,
+                    Template = template,
+                }
+            );
+            var service = new HealthTrackerService(store, new FakeCurrentUser());
+            var recordedAt = new DateTimeOffset(2024, 1, 15, 8, 30, 0, TimeSpan.FromHours(1));
+
+            var reading = await service.CreateReadingAsync(
+                new CreateReadingDto(template.Id, 5.2m, "mmol/L", recordedAt, null),
+                CancellationToken.None
+            );
+
+            Assert.Equal(recordedAt.ToUniversalTime(), reading.RecordedAtUtc);
+        }
+
+        [Fact]
         public async Task Create_reading_rejects_a_note_over_140_characters()
         {
             var store = new FakeStore();

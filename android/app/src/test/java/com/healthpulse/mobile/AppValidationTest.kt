@@ -32,4 +32,9 @@ class AppValidationTest {
         )
         assertNull(AppValidation.reading("5.2", "Fasting", Instant.now()))
     }
+
+    @Test
+    fun historicalReadingDatesAreAllowed() {
+        assertNull(AppValidation.reading("5.2", "Backdated", Instant.parse("2024-01-15T08:30:00Z")))
+    }
 }
