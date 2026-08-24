@@ -72,6 +72,8 @@ The image supplies `ConnectionStrings__HealthTracker=Data Source=/app/App_Data/h
 
 The web app's **App information** page shows the deployed application version, GitHub Actions build number, commit SHA, and UTC build time. It also provides a download link for the latest published Android APK. CI injects the deployment metadata into each production image; locally built containers show `development` / `local` values.
 
+Application diagnostics are written to rolling UTF-8 text files under `/app/App_Data/Logs` and are retained for 14 days by default, with a 10 MB limit per active daily file. The `Logging:File:RetentionDays` and `Logging:File:MaximumFileSizeBytes` settings can override those limits. Administrators can open **Application logs** in the web app, use the direct text view, or download the retained output as `healthpulse-logs.txt`. The direct links are ordinary authenticated HTTP requests, so they remain useful when an interactive Blazor circuit is disconnected. Request logging excludes query strings, headers, cookies, and request bodies; do not treat administrator-only log output as public data.
+
 ### Android releases
 
 Tag a release commit as `android-v<major>.<minor>.<patch>` (for example, `android-v1.0.0`). The **Android release** GitHub Actions workflow validates the Android project, builds a signed release APK, verifies its signature, and uploads it as a GitHub Release asset named `HealthPulse-<version>.apk`. It also preserves the APK as a workflow artifact.

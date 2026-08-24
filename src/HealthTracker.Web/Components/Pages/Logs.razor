@@ -1,0 +1,69 @@
+@page "/logs"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Administrator")]
+@using HealthTracker.Web.Services
+@inject ApplicationLogService LogService
+@inject ILogger<Logs> Logger
+
+<PageTitle>Application logs · HealthPulse</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4 logs-heading">
+    <div>
+        <MudText Typo="Typo.h3">Application logs</MudText>
+        <MudText Color="MudBlazor.Color.Secondary">Use these diagnostics when the web or Android connection fails.</MudText>
+    </div>
+    <MudStack Row="true" Spacing="2" Class="logs-actions">
+        <MudButton Href="/admin/logs/raw" Target="_blank" Rel="noopener noreferrer" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.OpenInNew">Open text view</MudButton>
+        <MudButton Href="/admin/logs/download" Variant="Variant.Filled" Color="MudBlazor.Color.Primary" StartIcon="@Icons.Material.Filled.Download">Download .txt</MudButton>
+        <MudButton OnClick="LoadAsync" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Refresh">Refresh</MudButton>
+    </MudStack>
+</MudStack>
+
+<MudAlert Severity="Severity.Info" Class="mb-4">
+    Logs are retained on the server under durable application storage. They include request, startup, authentication, database, SignalR, and Blazor circuit diagnostics, but not request bodies or query strings. Access is restricted to administrators.
+</MudAlert>
+
+<MudPaper Class="pa-3 log-viewer" Elevation="0">
+    @if (loading && snapshot is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="MudBlazor.Color.Primary" />
+    }
+    else if (error is not null)
+    {
+        <MudAlert Severity="Severity.Error">The log could not be read. Use the direct text view or download link to try again.</MudAlert>
+    }
+    else if (snapshot is not null)
+    {
+        <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-2 log-meta">
+            <MudText Typo="Typo.caption" Color="MudBlazor.Color.Secondary">@snapshot.FileCount retained file(s)</MudText>
+            <MudText Typo="Typo.caption" Color="MudBlazor.Color.Secondary">Snapshot @snapshot.GeneratedAtUtc.ToLocalTime().ToString("g")</MudText>
+        </MudStack>
+        <pre>@snapshot.Content</pre>
+    }
+</MudPaper>
+
+@code {
+    private ApplicationLogSnapshot? snapshot;
+    private string? error;
+    private bool loading;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            snapshot = await LogService.ReadForViewerAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unable to load the administrator application log viewer.");
+            error = "Log read failed.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

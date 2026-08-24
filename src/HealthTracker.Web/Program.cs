@@ -7,6 +7,8 @@ using HealthTracker.Infrastructure.Persistence;
 using HealthTracker.Web.Authentication;
 using HealthTracker.Web.Components;
 using HealthTracker.Web.Configuration;
+using HealthTracker.Web.Logging;
+using HealthTracker.Web.Middleware;
 using HealthTracker.Web.Services;
 
 using Microsoft.AspNetCore.Antiforgery;
@@ -36,6 +38,20 @@ builder
         reloadOnChange: true
     )
     .AddEnvironmentVariables();
+var fileLogging = builder.Configuration.GetSection("Logging:File");
+var retentionDays = Math.Clamp(fileLogging.GetValue("RetentionDays", 14), 1, 90);
+var maximumFileSizeBytes = Math.Clamp(
+    fileLogging.GetValue("MaximumFileSizeBytes", 10 * 1024 * 1024),
+    1 * 1024 * 1024,
+    100 * 1024 * 1024
+);
+builder.Logging.AddProvider(
+    new RollingFileLoggerProvider(
+        Path.Combine(builder.Environment.ContentRootPath, "App_Data", "Logs"),
+        TimeSpan.FromDays(retentionDays),
+        maximumFileSizeBytes
+    )
+);
 var oidc =
     builder.Configuration.GetSection(ExternalOidcSettings.SectionName).Get<ExternalOidcSettings>()
     ?? new ExternalOidcSettings();
@@ -49,6 +65,7 @@ builder.Services.AddMcpServer()
     .WithTools<HealthTracker.Web.Mcp.HealthPulseMcpTools>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ApplicationLogService>();
 builder.Services.AddHttpClient<MobileReleaseService>(client =>
 {
     client.BaseAddress = new Uri("https://api.github.com/");
@@ -193,10 +210,25 @@ builder.Services.AddScoped<IAuthorizationHandler>(
     serviceProvider => serviceProvider.GetRequiredService<AccessControlAuthorizationHandler>()
 );
 var app = builder.Build();
+var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("HealthPulse.Startup");
+startupLogger.LogInformation(
+    "HealthPulse is starting in {EnvironmentName}; assembly version {AssemblyVersion}.",
+    app.Environment.EnvironmentName,
+    typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown"
+);
 using (var scope = app.Services.CreateScope())
 {
-    await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync();
+    try
+    {
+        await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync();
+    }
+    catch (Exception exception)
+    {
+        startupLogger.LogCritical(exception, "HealthPulse database initialization failed.");
+        throw;
+    }
 }
+startupLogger.LogInformation("HealthPulse startup checks completed.");
 
 if (!app.Environment.IsDevelopment())
 {
@@ -207,6 +239,7 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<HealthTracker.Web.Mcp.McpAuditAndDailyLimitMiddleware>();
@@ -266,6 +299,24 @@ app.MapGet(
     async (MobileReleaseService mobileReleaseService, CancellationToken cancellationToken) =>
         Results.Ok(await mobileReleaseService.GetLatestAsync(cancellationToken))
 ).AllowAnonymous();
+app.MapGet(
+        "/admin/logs/raw",
+        async (ApplicationLogService logService, CancellationToken cancellationToken) =>
+        {
+            var content = await logService.ReadForDownloadAsync(cancellationToken);
+            return Results.File(content, "text/plain; charset=utf-8");
+        }
+    )
+    .RequireAuthorization("Administrator");
+app.MapGet(
+        "/admin/logs/download",
+        async (ApplicationLogService logService, CancellationToken cancellationToken) =>
+        {
+            var content = await logService.ReadForDownloadAsync(cancellationToken);
+            return Results.File(content, "text/plain; charset=utf-8", "healthpulse-logs.txt");
+        }
+    )
+    .RequireAuthorization("Administrator");
 app.MapControllers();
 app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = "PersonalAccessToken" });
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

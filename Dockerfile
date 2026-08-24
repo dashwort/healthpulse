@@ -19,7 +19,7 @@ ARG DEPLOYMENT_VERSION=development
 ARG DEPLOYMENT_BUILD=local
 ARG DEPLOYMENT_COMMIT=local
 ARG DEPLOYMENT_BUILT_AT_UTC=Not_available
-RUN mkdir -p /app/App_Data && chown -R $APP_UID:$APP_UID /app/App_Data
+RUN mkdir -p /app/App_Data/Logs && chown -R $APP_UID:$APP_UID /app/App_Data
 # Configuration values that are safe to publish as image defaults. The empty
 # values are deliberate: they advertise the required runtime settings without
 # embedding credentials or an installation-specific administrator address.

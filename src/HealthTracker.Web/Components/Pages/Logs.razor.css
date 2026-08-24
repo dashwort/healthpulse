@@ -1,0 +1,33 @@
+.log-viewer {
+    overflow: hidden;
+}
+
+.log-viewer pre {
+    background: #0b1120;
+    border: 1px solid rgba(148, 163, 184, .24);
+    border-radius: .5rem;
+    color: #dbeafe;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: .78rem;
+    line-height: 1.45;
+    margin: 0;
+    max-height: 70vh;
+    min-height: 18rem;
+    overflow: auto;
+    padding: 1rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 959.98px) {
+    .logs-heading,
+    .logs-actions,
+    .log-meta {
+        align-items: stretch !important;
+        flex-direction: column !important;
+    }
+
+    .logs-actions .mud-button {
+        width: 100%;
+    }
+}

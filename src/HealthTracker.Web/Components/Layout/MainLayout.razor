@@ -29,7 +29,10 @@
             <MudNavLink Href="/templates" Icon="@Icons.Material.Filled.Tune">Templates</MudNavLink>
             <MudNavLink Href="/readings" Icon="@Icons.Material.Filled.MonitorHeart">Readings</MudNavLink>
             <MudNavLink Href="/tokens" Icon="@Icons.Material.Filled.Key">Access tokens</MudNavLink>
-            <AuthorizeView Policy="Administrator"><Authorized><MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group">User management</MudNavLink></Authorized></AuthorizeView>
+            <AuthorizeView Policy="Administrator"><Authorized>
+                <MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group">User management</MudNavLink>
+                <MudNavLink Href="/logs" Icon="@Icons.Material.Filled.Description">Application logs</MudNavLink>
+            </Authorized></AuthorizeView>
             <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Info">App information</MudNavLink>
         </MudNavMenu>
     </MudDrawer>
