@@ -65,6 +65,16 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-,format=short
+      - name: Collect deployment metadata
+        id: deployment
+        shell: bash
+        run: |
+          VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props)"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "built_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
       - name: Build and publish container
         id: build-image
         uses: docker/build-push-action@v6
@@ -74,6 +84,11 @@ jobs:
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            DEPLOYMENT_VERSION=${{ steps.deployment.outputs.version }}
+            DEPLOYMENT_BUILD=${{ steps.deployment.outputs.build }}
+            DEPLOYMENT_COMMIT=${{ steps.deployment.outputs.commit }}
+            DEPLOYMENT_BUILT_AT_UTC=${{ steps.deployment.outputs.built_at_utc }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

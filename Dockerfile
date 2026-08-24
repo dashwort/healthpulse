@@ -15,6 +15,10 @@ RUN dotnet publish "src/HealthTracker.Web/HealthTracker.Web.csproj" --configurat
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
+ARG DEPLOYMENT_VERSION=development
+ARG DEPLOYMENT_BUILD=local
+ARG DEPLOYMENT_COMMIT=local
+ARG DEPLOYMENT_BUILT_AT_UTC=Not_available
 RUN mkdir -p /app/App_Data && chown -R $APP_UID:$APP_UID /app/App_Data
 # Configuration values that are safe to publish as image defaults. The empty
 # values are deliberate: they advertise the required runtime settings without
@@ -29,7 +33,11 @@ ENV ASPNETCORE_ENVIRONMENT=Production \
     Mobile__Android__LatestVersion="" \
     Mobile__Android__ApkUrl="" \
     Mobile__Android__ReleaseNotes="" \
-    Mobile__Android__ReleaseRepository="dashwort/healthpulse"
+    Mobile__Android__ReleaseRepository="dashwort/healthpulse" \
+    Deployment__Version="${DEPLOYMENT_VERSION}" \
+    Deployment__Build="${DEPLOYMENT_BUILD}" \
+    Deployment__Commit="${DEPLOYMENT_COMMIT}" \
+    Deployment__BuiltAtUtc="${DEPLOYMENT_BUILT_AT_UTC}"
 EXPOSE 8080
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "HealthTracker.Web.dll"]

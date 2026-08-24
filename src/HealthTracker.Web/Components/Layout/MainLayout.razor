@@ -28,6 +28,7 @@
             <MudNavLink Href="/readings" Icon="@Icons.Material.Filled.MonitorHeart" OnClick="CloseDrawer">Readings</MudNavLink>
             <MudNavLink Href="/tokens" Icon="@Icons.Material.Filled.Key" OnClick="CloseDrawer">Access tokens</MudNavLink>
             <AuthorizeView Policy="Administrator"><Authorized><MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group" OnClick="CloseDrawer">User management</MudNavLink></Authorized></AuthorizeView>
+            <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Info" OnClick="CloseDrawer">App information</MudNavLink>
         </MudNavMenu>
     </MudDrawer>
     <MudMainContent Class="pa-6 mt-12">@Body</MudMainContent>

@@ -1,0 +1,55 @@
+@page "/settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using HealthTracker.Web.Configuration
+@using Microsoft.Extensions.Options
+@inject IOptions<DeploymentInfo> Deployment
+
+<PageTitle>App information · HealthPulse</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-1">App information</MudText>
+<MudText Color="MudBlazor.Color.Secondary" Class="mb-4">Deployment details can help when reporting an issue or confirming an update.</MudText>
+
+<MudPaper Class="pa-5" Elevation="0" Style="max-width: 720px">
+    <MudStack Spacing="3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Color="MudBlazor.Color.Primary" />
+            <MudText Typo="Typo.h5">Deployment</MudText>
+        </MudStack>
+        <MudDivider />
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.caption" Color="MudBlazor.Color.Secondary">Version</MudText>
+                <MudText Typo="Typo.body1">@info.Version</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.caption" Color="MudBlazor.Color.Secondary">Build</MudText>
+                <MudText Typo="Typo.body1">@info.Build</MudText>
+            </MudItem>
+            <MudItem xs="12">
+                <MudText Typo="Typo.caption" Color="MudBlazor.Color.Secondary">Commit</MudText>
+                <MudText Typo="Typo.body1" Style="word-break: break-all"><code>@info.Commit</code></MudText>
+            </MudItem>
+            <MudItem xs="12">
+                <MudText Typo="Typo.caption" Color="MudBlazor.Color.Secondary">Built</MudText>
+                <MudText Typo="Typo.body1">@FormattedBuildTime</MudText>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</MudPaper>
+
+@code {
+    private DeploymentInfo info = default!;
+
+    protected override void OnInitialized() => info = Deployment.Value;
+
+    private string FormattedBuildTime =>
+        DateTimeOffset.TryParse(
+            info.BuiltAtUtc,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var builtAt
+        )
+            ? builtAt.ToLocalTime().ToString("f")
+            : info.BuiltAtUtc;
+}

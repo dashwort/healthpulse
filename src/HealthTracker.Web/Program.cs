@@ -41,6 +41,9 @@ var oidc =
     ?? new ExternalOidcSettings();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddControllers();
+builder.Services.Configure<DeploymentInfo>(
+    builder.Configuration.GetSection(DeploymentInfo.SectionName)
+);
 builder.Services.AddMcpServer()
     .WithHttpTransport(options => options.Stateless = true)
     .WithTools<HealthTracker.Web.Mcp.HealthPulseMcpTools>();
