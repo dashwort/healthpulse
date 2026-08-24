@@ -154,13 +154,18 @@ builder.Services.AddAuthorization(options =>
     var interactiveAuthenticationScheme = usesDevelopmentAuthentication
         ? "Development"
         : CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultPolicy = new AuthorizationPolicyBuilder(
-            interactiveAuthenticationScheme,
-            "MobileBearer"
-        )
+    options.DefaultPolicy = new AuthorizationPolicyBuilder(interactiveAuthenticationScheme)
         .RequireAuthenticatedUser()
         .AddRequirements(new ActiveAllowedUserRequirement())
         .Build();
+    options.AddPolicy(
+        "MobileApiUser",
+        policy =>
+            policy
+                .AddAuthenticationSchemes(interactiveAuthenticationScheme, "MobileBearer")
+                .RequireAuthenticatedUser()
+                .AddRequirements(new ActiveAllowedUserRequirement())
+    );
     options.AddPolicy(
         "InteractiveUser",
         policy =>
@@ -173,7 +178,7 @@ builder.Services.AddAuthorization(options =>
         "Administrator",
         policy =>
             policy
-                .AddAuthenticationSchemes(interactiveAuthenticationScheme, "MobileBearer")
+                .AddAuthenticationSchemes(interactiveAuthenticationScheme)
                 .RequireAuthenticatedUser()
                 .AddRequirements(new ActiveAllowedUserRequirement(), new AdministratorRequirement())
     );

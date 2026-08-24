@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HealthTracker.Web.Controllers
 {
-    [ApiController, Authorize, Route("api/templates")]
+    [ApiController, Authorize(Policy = "MobileApiUser"), Route("api/templates")]
     public sealed class TemplatesController(HealthTrackerService service) : ControllerBase
     {
         [HttpGet("catalogue")]

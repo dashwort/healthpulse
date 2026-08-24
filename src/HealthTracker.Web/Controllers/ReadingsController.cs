@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HealthTracker.Web.Controllers
 {
-    [ApiController, Authorize, Route("api/readings")]
+    [ApiController, Authorize(Policy = "MobileApiUser"), Route("api/readings")]
     public sealed class ReadingsController(HealthTrackerService service) : ControllerBase
     {
         [HttpGet]
