@@ -122,7 +122,7 @@ The endpoint allows 60 calls per minute and 1,000 calls per token per day, retur
 - `POST|PUT|DELETE /api/templates/custom/{templateId?}`
 - `GET|POST /api/readings`, `PUT|DELETE /api/readings/{readingId}`
 
-Built-in templates include urate, glucose, HbA1c, lipid measurements, ketones, weight, body fat, waist, temperature, heart rate, oxygen saturation, and separate systolic/diastolic blood pressure. Supported input units are normalized on write for built-in templates. Custom templates preserve their defined unit without conversion.
+Built-in templates include urate (normalized to `umol/L`), glucose, HbA1c, lipid measurements, ketones, weight, body fat, waist, temperature, heart rate, oxygen saturation, and separate systolic/diastolic blood pressure. Supported input units are normalized on write for built-in templates. Custom templates preserve their defined unit without conversion.
 
 Deletes are soft deletes. A background worker permanently removes soft-deleted records after 60 days. This app records measurements only; it does not provide medical interpretation or advice.
 

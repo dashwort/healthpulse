@@ -22,5 +22,15 @@ namespace HealthTracker.Application.Tests
 
             Assert.Throws<InvalidOperationException>(() => UnitConverter.Normalize(10m, urate, "kg"));
         }
+
+        [Fact]
+        public void Urate_uses_umol_per_litre_as_the_default_and_converts_mg_per_dl()
+        {
+            var urate = BuiltInTemplates.All.Single(x => x.Code == "urate");
+
+            Assert.Equal("umol/L", urate.NormalizedUnit);
+            Assert.Equal(["umol/L", "mg/dL"], urate.AllowedUnits);
+            Assert.Equal(1000m, UnitConverter.Normalize(16.81m, urate, "mg/dL"), 3);
+        }
     }
 }

@@ -11,8 +11,8 @@ namespace HealthTracker.Domain.Models
                 "Urate",
                 "Blood chemistry",
                 "Urate",
-                "mmol/L",
-                ["mmol/L", "mg/dL"]
+                "umol/L",
+                ["umol/L", "mg/dL"]
             ),
             Definition(
                 "0b4b7051-b360-4d2d-9f36-0776baf95d02",

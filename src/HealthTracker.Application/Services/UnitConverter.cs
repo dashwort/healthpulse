@@ -25,7 +25,7 @@ namespace HealthTracker.Application.Services
             return template.UnitCategory switch
             {
                 "Glucose" => value / 18.0182m,
-                "Urate" => value / 16.81m,
+                "Urate" => value * 1000m / 16.81m,
                 "Cholesterol" => value / 38.67m,
                 "Triglycerides" => value / 88.57m,
                 "HbA1c" => (value + 2.15m) / 10.929m,
