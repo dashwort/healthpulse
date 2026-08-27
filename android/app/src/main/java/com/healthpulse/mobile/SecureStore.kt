@@ -14,32 +14,36 @@ import javax.crypto.spec.GCMParameterSpec
 /**
  * Small encrypted key-value store for mobile session material. The AES key never leaves Android Keystore.
  */
-class SecureStore(context: Context) {
+class SecureStore(context: Context) : CredentialStore {
     private val preferences = context.getSharedPreferences("healthpulse.credentials", Context.MODE_PRIVATE)
 
-    fun contains(key: String): Boolean = preferences.contains(key)
+    override fun contains(key: String): Boolean = preferences.contains(key)
 
-    fun getString(key: String, defaultValue: String? = null): String? {
+    override fun getString(key: String, defaultValue: String?): String? {
         val encrypted = preferences.getString(key, null) ?: return defaultValue
         return runCatching { decrypt(encrypted) }.getOrDefault(defaultValue)
     }
 
-    fun getLong(key: String, defaultValue: Long = 0): Long =
+    override fun getLong(key: String, defaultValue: Long): Long =
         getString(key)?.toLongOrNull() ?: defaultValue
 
-    fun putString(key: String, value: String) {
+    fun getString(key: String): String? = getString(key, null)
+
+    fun getLong(key: String): Long = getLong(key, 0)
+
+    override fun putString(key: String, value: String) {
         preferences.edit().putString(key, encrypt(value)).apply()
     }
 
-    fun putLong(key: String, value: Long) {
+    override fun putLong(key: String, value: Long) {
         putString(key, value.toString())
     }
 
-    fun remove(key: String) {
+    override fun remove(key: String) {
         preferences.edit().remove(key).apply()
     }
 
-    fun clear() {
+    override fun clear() {
         preferences.edit().clear().apply()
     }
 

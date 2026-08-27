@@ -26,8 +26,18 @@ jobs:
         run: dotnet restore HealthTracker.slnx
       - name: Build solution
         run: dotnet build HealthTracker.slnx --configuration Release --no-restore
+      - name: Install Playwright browser
+        shell: pwsh
+        run: pwsh tests/HealthTracker.Web.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      - name: Enforce reflection-free tests
+        shell: bash
+        run: |
+          if rg -n 'System\.Reflection|BindingFlags|Activator\.CreateInstance' tests android --glob '*.cs' --glob '*.kt'; then
+            echo "Reflection-based test access is not permitted. Use public seams instead." >&2
+            exit 1
+          fi
       - name: Run tests
-        run: dotnet test HealthTracker.slnx --configuration Release --no-build --logger trx --results-directory TestResults
+        run: dotnet test HealthTracker.slnx --configuration Release --no-build --collect:"XPlat Code Coverage" --logger trx --results-directory TestResults
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -36,9 +46,52 @@ jobs:
           path: TestResults
           if-no-files-found: ignore
 
+  android-test:
+    name: Build and test Android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Run Android unit tests
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4codex.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Android instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          working-directory: android
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: ./gradlew connectedDebugAndroidTest
+      - name: Upload Android test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results-${{ github.run_id }}
+          path: |
+            ~/.gradle/healthpulse-build/app/reports
+            ~/.gradle/healthpulse-build/app/outputs/androidTest-results
+          if-no-files-found: ignore
+
   container:
     name: Build container
-    needs: build-test
+    needs: [build-test, android-test]
     runs-on: ubuntu-latest
     outputs:
       image_digest: ${{ steps.build-image.outputs.digest }}

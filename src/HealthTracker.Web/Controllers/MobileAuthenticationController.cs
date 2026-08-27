@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
 using HealthTracker.Application.Services;
+using HealthTracker.Domain.Models;
 using HealthTracker.Web.Services;
 
 using Microsoft.AspNetCore.Authentication;
@@ -13,7 +14,8 @@ namespace HealthTracker.Web.Controllers
     [ApiController, Route("api/mobile/auth")]
     public sealed class MobileAuthenticationController(
         MobileAuthenticationService mobileAuthentication,
-        HealthTrackerService healthTrackerService
+        HealthTrackerService healthTrackerService,
+        AccessActivityService accessActivityService
     ) : ControllerBase
     {
         [AllowAnonymous, HttpGet("authorize")]
@@ -61,6 +63,12 @@ namespace HealthTracker.Web.Controllers
                 var (request, authorizationCode) = await mobileAuthentication.CompleteAsync(
                     requestId,
                     user.Id,
+                    ct
+                );
+                await accessActivityService.RecordForCurrentUserAsync(
+                    AccessActivityType.AndroidAuthorization,
+                    HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    HttpContext.Request.Headers.UserAgent.ToString(),
                     ct
                 );
                 return Redirect(

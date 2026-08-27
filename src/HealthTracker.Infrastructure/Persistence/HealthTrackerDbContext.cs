@@ -11,6 +11,7 @@ namespace HealthTracker.Infrastructure.Persistence
         public DbSet<AllowedUserRecord> AllowedUsers => Set<AllowedUserRecord>();
         public DbSet<PersonalAccessTokenRecord> PersonalAccessTokens => Set<PersonalAccessTokenRecord>();
         public DbSet<McpAuditLogRecord> McpAuditLogs => Set<McpAuditLogRecord>();
+        public DbSet<AccessActivityRecord> AccessActivities => Set<AccessActivityRecord>();
         public DbSet<MobileAuthorizationRequestRecord> MobileAuthorizationRequests =>
             Set<MobileAuthorizationRequestRecord>();
         public DbSet<MobileSessionRecord> MobileSessions => Set<MobileSessionRecord>();
@@ -83,6 +84,19 @@ namespace HealthTracker.Infrastructure.Persistence
                 entity.Property(x => x.Method).HasMaxLength(100).IsRequired();
                 entity.Property(x => x.Outcome).HasMaxLength(20).IsRequired();
                 entity.HasIndex(x => new { x.PersonalAccessTokenId, x.OccurredUtc });
+                entity.HasIndex(x => new { x.AllowedUserId, x.OccurredUtc });
+                ConfigureUtc(entity.Property(x => x.OccurredUtc));
+            });
+            modelBuilder.Entity<AccessActivityRecord>(entity =>
+            {
+                entity.ToTable("AccessActivities");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Type).HasMaxLength(40).IsRequired();
+                entity.Property(x => x.Outcome).HasMaxLength(20).IsRequired();
+                entity.Property(x => x.FailureReason).HasMaxLength(40);
+                entity.Property(x => x.SourceIpAddress).HasMaxLength(45);
+                entity.Property(x => x.UserAgent).HasMaxLength(512);
+                entity.HasIndex(x => x.OccurredUtc);
                 entity.HasIndex(x => new { x.AllowedUserId, x.OccurredUtc });
                 ConfigureUtc(entity.Property(x => x.OccurredUtc));
             });

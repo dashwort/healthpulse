@@ -1,555 +1,770 @@
-using HealthTracker.Application.Abstractions;
+using AwesomeAssertions;
 using HealthTracker.Application.Dtos;
 using HealthTracker.Application.Services;
 using HealthTracker.Domain.Models;
+using HealthTracker.Testing;
 
-namespace HealthTracker.Application.Tests
+namespace HealthTracker.Application.Tests;
+
+public sealed class HealthTrackerServiceTests
 {
-    public sealed class HealthTrackerServiceTests
+    [Fact]
+    public async Task Create_reading_normalizes_built_in_units_and_preserves_a_short_note()
     {
-        [Fact]
-        public async Task Create_reading_preserves_a_short_note()
-        {
-            var store = new FakeStore();
-            var template = BuiltInTemplates.All.Single(x => x.Code == "glucose");
-            store.Templates.Add(template);
-            store.Trackings.Add(
-                new UserTrackedTemplate
-                {
-                    UserId = store.User.Id,
-                    TemplateId = template.Id,
-                    Template = template,
-                }
-            );
-            var service = new HealthTrackerService(store, new FakeCurrentUser());
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var service = CreateService(store);
+        var recordedAt = new DateTimeOffset(2024, 1, 15, 8, 30, 0, TimeSpan.FromHours(1));
 
-            var reading = await service.CreateReadingAsync(
-                new CreateReadingDto(template.Id, 100m, "mg/dL", DateTimeOffset.UtcNow, "Fasting"),
-                CancellationToken.None
-            );
+        // Act
+        var result = await service.CreateReadingAsync(
+            new CreateReadingDto(
+                store.Templates.Single().Id,
+                100m,
+                "mg/dL",
+                recordedAt,
+                "Fasting"
+            ),
+            CancellationToken.None
+        );
 
-            Assert.Equal("Fasting", reading.Note);
-            Assert.Equal("mmol/L", reading.Unit);
-        }
-
-        [Fact]
-        public async Task Create_reading_allows_a_historical_timestamp()
-        {
-            var store = new FakeStore();
-            var template = BuiltInTemplates.All.Single(x => x.Code == "glucose");
-            store.Templates.Add(template);
-            store.Trackings.Add(
-                new UserTrackedTemplate
-                {
-                    UserId = store.User.Id,
-                    TemplateId = template.Id,
-                    Template = template,
-                }
-            );
-            var service = new HealthTrackerService(store, new FakeCurrentUser());
-            var recordedAt = new DateTimeOffset(2024, 1, 15, 8, 30, 0, TimeSpan.FromHours(1));
-
-            var reading = await service.CreateReadingAsync(
-                new CreateReadingDto(template.Id, 5.2m, "mmol/L", recordedAt, null),
-                CancellationToken.None
-            );
-
-            Assert.Equal(recordedAt.ToUniversalTime(), reading.RecordedAtUtc);
-        }
-
-        [Fact]
-        public async Task Create_reading_rejects_a_note_over_140_characters()
-        {
-            var store = new FakeStore();
-            var template = BuiltInTemplates.All.Single(x => x.Code == "glucose");
-            store.Templates.Add(template);
-            store.Trackings.Add(
-                new UserTrackedTemplate
-                {
-                    UserId = store.User.Id,
-                    TemplateId = template.Id,
-                    Template = template,
-                }
-            );
-            var service = new HealthTrackerService(store, new FakeCurrentUser());
-
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                service.CreateReadingAsync(
-                    new CreateReadingDto(
-                        template.Id,
-                        5m,
-                        "mmol/L",
-                        DateTimeOffset.UtcNow,
-                        new string('x', 141)
-                    ),
-                    CancellationToken.None
-                )
-            );
-        }
-
-        [Fact]
-        public async Task Reading_page_filters_and_reports_total_count()
-        {
-            var store = new FakeStore();
-            var template = BuiltInTemplates.All.Single(x => x.Code == "glucose");
-            store.Templates.Add(template);
-            store.Readings.AddRange(
-                Enumerable
-                    .Range(1, 3)
-                    .Select(i => new HealthReading
-                    {
-                        UserId = store.User.Id,
-                        TemplateId = template.Id,
-                        TemplateName = template.Name,
-                        Value = i,
-                        Unit = "mmol/L",
-                        RecordedAtUtc = DateTimeOffset.UtcNow.AddDays(-i),
-                    })
-            );
-            var service = new HealthTrackerService(store, new FakeCurrentUser());
-
-            var page = await service.GetReadingPageAsync(
-                template.Id,
-                null,
-                null,
-                2,
-                2,
-                CancellationToken.None
-            );
-
-            Assert.Equal(3, page.TotalCount);
-            Assert.Single(page.Items);
-        }
-
-        [Fact]
-        public async Task Catalogue_excludes_custom_templates_owned_by_another_user()
-        {
-            var store = new FakeStore();
-            var ownTemplate = new MeasurementTemplate
-            {
-                Id = Guid.NewGuid(),
-                OwnerUserId = store.User.Id,
-                Name = "Own metric",
-                Category = "Custom",
-                NormalizedUnit = "unit",
-                AllowedUnits = ["unit"],
-            };
-            var otherTemplate = new MeasurementTemplate
-            {
-                Id = Guid.NewGuid(),
-                OwnerUserId = Guid.NewGuid(),
-                Name = "Private metric",
-                Category = "Custom",
-                NormalizedUnit = "unit",
-                AllowedUnits = ["unit"],
-            };
-            store.Templates.AddRange([ownTemplate, otherTemplate]);
-            var service = new HealthTrackerService(store, new FakeCurrentUser());
-
-            var catalogue = await service.GetCatalogueAsync(CancellationToken.None);
-
-            Assert.Contains(catalogue, x => x.Id == ownTemplate.Id);
-            Assert.DoesNotContain(catalogue, x => x.Id == otherTemplate.Id);
-        }
-
-        [Fact]
-        public async Task Allowed_user_can_be_archived_and_reactivated_case_insensitively()
-        {
-            var store = new FakeStore();
-            var service = new HealthTrackerService(store, new FakeCurrentUser());
-
-            var added = await service.AddAllowedUserAsync(
-                new AddAllowedUserDto("Family@Example.com", "Member"),
-                CancellationToken.None
-            );
-            await service.ArchiveAllowedUserAsync(added.Id, CancellationToken.None);
-            var reactivated = await service.AddAllowedUserAsync(
-                new AddAllowedUserDto("family@example.com", "Admin"),
-                CancellationToken.None
-            );
-
-            Assert.Equal(added.Id, reactivated.Id);
-            Assert.Equal("Admin", reactivated.Role);
-            Assert.False(reactivated.IsArchived);
-        }
-
-        [Fact]
-        public async Task Archiving_a_user_revokes_tokens_that_cannot_be_restored_by_reactivation()
-        {
-            var store = new FakeStore();
-            var service = new HealthTrackerService(store, new FakeCurrentUser());
-            var user = await service.AddAllowedUserAsync(
-                new AddAllowedUserDto("Family@Example.com", "Member"),
-                CancellationToken.None
-            );
-            var token = new PersonalAccessToken
-            {
-                AllowedUserId = user.Id,
-                Hash = "A valid test hash",
-                ExpiresUtc = DateTimeOffset.UtcNow.AddDays(1),
-            };
-            store.Tokens.Add(token);
-
-            await service.ArchiveAllowedUserAsync(user.Id, CancellationToken.None);
-            await service.AddAllowedUserAsync(
-                new AddAllowedUserDto("family@example.com", "Member"),
-                CancellationToken.None
-            );
-
-            Assert.True(token.RevokedUtc.HasValue);
-        }
-
-        [Fact]
-        public async Task Last_administrator_cannot_be_archived_or_demoted()
-        {
-            var store = new FakeStore();
-            var service = new HealthTrackerService(store, new FakeCurrentUser());
-            var administrator = Assert.Single(store.AllowedUsers);
-
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                service.ArchiveAllowedUserAsync(administrator.Id, CancellationToken.None)
-            );
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                service.UpdateAllowedUserRoleAsync(
-                    administrator.Id,
-                    new UpdateAllowedUserRoleDto("Member"),
-                    CancellationToken.None
-                )
-            );
-        }
-
-        [Fact]
-        public async Task Personal_access_tokens_are_hashed_expire_in_one_year_and_can_be_revoked()
-        {
-            var store = new FakeStore();
-            var service = new PersonalAccessTokenService(store, new FakeCurrentUser());
-
-            var created = await service.CreateTokenAsync("Codex", CancellationToken.None);
-            var tokens = await service.GetTokensAsync(CancellationToken.None);
-
-            Assert.StartsWith("hp_", created.Secret);
-            Assert.NotEqual(created.Secret, store.Tokens.Single().Hash);
-            Assert.Equal(PersonalAccessTokenService.Hash(created.Secret), store.Tokens.Single().Hash);
-            Assert.InRange(created.Token.ExpiresUtc, DateTimeOffset.UtcNow.AddYears(1).AddMinutes(-1), DateTimeOffset.UtcNow.AddYears(1).AddMinutes(1));
-            Assert.Single(tokens);
-
-            await service.RevokeTokenAsync(created.Token.Id, null, CancellationToken.None);
-            Assert.True(store.Tokens.Single().RevokedUtc.HasValue);
-        }
-
-        [Fact]
-        public async Task Personal_access_tokens_enforce_the_five_token_limit()
-        {
-            var store = new FakeStore();
-            var service = new PersonalAccessTokenService(store, new FakeCurrentUser());
-            for (var index = 0; index < 5; index++)
-            {
-                await service.CreateTokenAsync($"Token {index}", CancellationToken.None);
-            }
-
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                service.CreateTokenAsync("Too many", CancellationToken.None));
-        }
-
-        private sealed class FakeCurrentUser : ICurrentUser
-        {
-            public string Subject => "test-user";
-            public string DisplayName => "Test user";
-            public string Email => "test@example.com";
-        }
-
-        private sealed class FakeStore : IHealthDataStore
-        {
-            public ApplicationUser User
-            {
-                get;
-            } =
-                new()
-                {
-                    Subject = "test-user",
-                    DisplayName = "Test user"
-                };
-            public List<MeasurementTemplate> Templates { get; } = [];
-            public List<UserTrackedTemplate> Trackings { get; } = [];
-            public List<HealthReading> Readings { get; } = [];
-            public List<AllowedUser> AllowedUsers
-            {
-                get;
-            } =
-            [
-                new()
-                {
-                    Email = "test@example.com",
-                    NormalizedEmail = "TEST@EXAMPLE.COM",
-                    Role = AllowedUserRole.Admin,
-                },
-            ];
-            public List<ApplicationUser> Users { get; } = [];
-            public List<PersonalAccessToken> Tokens { get; } = [];
-            public List<McpAuditLog> AuditLogs { get; } = [];
-            public List<MobileAuthorizationRequest> MobileAuthorizationRequests { get; } = [];
-            public List<MobileSession> MobileSessions { get; } = [];
-
-            public Task<ApplicationUser?> FindUserBySubjectAsync(
-                string subject,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult<ApplicationUser?>(subject == User.Subject ? User : null);
-            }
-
-            public Task AddUserAsync(ApplicationUser user, CancellationToken ct)
-            {
-                Users.Add(user);
-                return Task.CompletedTask;
-            }
-
-            public Task<IReadOnlyCollection<MeasurementTemplate>> GetCatalogueAsync(
-                Guid userId,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult<IReadOnlyCollection<MeasurementTemplate>>([
-                    .. Templates.Where(x => x.OwnerUserId is null || x.OwnerUserId == userId),
-                ]);
-            }
-
-            public Task<MeasurementTemplate?> GetTemplateForUserAsync(
-                Guid userId,
-                Guid templateId,
-                bool includeDeleted,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult(Templates.SingleOrDefault(x => x.Id == templateId));
-            }
-
-            public Task<IReadOnlyCollection<UserTrackedTemplate>> GetTrackedTemplatesAsync(
-                Guid userId,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult<IReadOnlyCollection<UserTrackedTemplate>>([
-                    .. Trackings.Where(x => x.UserId == userId && x.DeletedUtc is null),
-                ]);
-            }
-
-            public Task<UserTrackedTemplate?> GetTrackingAsync(
-                Guid userId,
-                Guid templateId,
-                bool includeDeleted,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult(
-                    Trackings.SingleOrDefault(x =>
-                        x.UserId == userId
-                        && x.TemplateId == templateId
-                        && (includeDeleted || x.DeletedUtc is null)
-                    )
-                );
-            }
-
-            public Task AddTrackingAsync(UserTrackedTemplate tracking, CancellationToken ct)
-            {
-                Trackings.Add(tracking);
-                return Task.CompletedTask;
-            }
-
-            public Task UpdateTrackingAsync(UserTrackedTemplate tracking, CancellationToken ct)
-            {
-                return Task.CompletedTask;
-            }
-
-            public Task AddTemplateAsync(MeasurementTemplate template, CancellationToken ct)
-            {
-                Templates.Add(template);
-                return Task.CompletedTask;
-            }
-
-            public Task UpdateTemplateAsync(MeasurementTemplate template, CancellationToken ct)
-            {
-                return Task.CompletedTask;
-            }
-
-            public Task AddReadingAsync(HealthReading reading, CancellationToken ct)
-            {
-                Readings.Add(reading);
-                return Task.CompletedTask;
-            }
-
-            public Task<HealthReading?> GetReadingAsync(
-                Guid userId,
-                Guid readingId,
-                bool includeDeleted,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult(
-                    Readings.SingleOrDefault(x =>
-                        x.UserId == userId
-                        && x.Id == readingId
-                        && (includeDeleted || x.DeletedUtc is null)
-                    )
-                );
-            }
-
-            public Task<IReadOnlyCollection<HealthReading>> GetReadingsAsync(
-                Guid userId,
-                Guid? templateId,
-                DateTimeOffset? fromUtc,
-                DateTimeOffset? toUtc,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult<IReadOnlyCollection<HealthReading>>([
-                    .. Readings
-                        .Where(x =>
-                            x.UserId == userId
-                            && x.DeletedUtc is null
-                            && (!templateId.HasValue || x.TemplateId == templateId)
-                            && (!fromUtc.HasValue || x.RecordedAtUtc >= fromUtc)
-                            && (!toUtc.HasValue || x.RecordedAtUtc <= toUtc)
-                        )
-                        .OrderByDescending(x => x.RecordedAtUtc),
-                ]);
-            }
-
-            public Task<ApplicationUser?> FindUserByIdAsync(Guid userId, CancellationToken ct) => Task.FromResult(Users.SingleOrDefault(x => x.Id == userId));
-
-            public Task<AllowedUser?> FindAllowedUserByEmailAsync(
-                string normalizedEmail,
-                bool includeDeleted,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult(
-                    AllowedUsers.SingleOrDefault(x =>
-                        x.NormalizedEmail == normalizedEmail
-                        && (includeDeleted || x.DeletedUtc is null)
-                    )
-                );
-            }
-
-            public Task<IReadOnlyCollection<AllowedUser>> GetAllowedUsersAsync(
-                bool includeDeleted,
-                CancellationToken ct
-            )
-            {
-                return Task.FromResult<IReadOnlyCollection<AllowedUser>>(
-                    [.. AllowedUsers.Where(x => includeDeleted || x.DeletedUtc is null)]
-                );
-            }
-
-            public Task<AllowedUser?> FindAllowedUserByIdAsync(Guid allowedUserId, bool includeDeleted, CancellationToken ct)
-            {
-                return Task.FromResult(AllowedUsers.SingleOrDefault(x => x.Id == allowedUserId && (includeDeleted || x.DeletedUtc is null)));
-            }
-
-            public Task<int> CountActiveAdministratorsAsync(CancellationToken ct)
-            {
-                return Task.FromResult(
-                    AllowedUsers.Count(x =>
-                        x.Role == AllowedUserRole.Admin && x.DeletedUtc is null
-                    )
-                );
-            }
-
-            public Task AddAllowedUserAsync(AllowedUser user, CancellationToken ct)
-            {
-                AllowedUsers.Add(user);
-                return Task.CompletedTask;
-            }
-
-            public Task UpdateAllowedUserAsync(AllowedUser user, CancellationToken ct)
-            {
-                return Task.CompletedTask;
-            }
-
-            public Task<int> CountActiveTokensAsync(Guid allowedUserId, CancellationToken ct) => Task.FromResult(Tokens.Count(x => x.AllowedUserId == allowedUserId && x.RevokedUtc is null && x.ExpiresUtc > DateTimeOffset.UtcNow));
-            public Task<PersonalAccessToken?> FindActiveTokenByHashAsync(string hash, CancellationToken ct) => Task.FromResult<PersonalAccessToken?>(Tokens.SingleOrDefault(x => x.Hash == hash && x.RevokedUtc is null && x.ExpiresUtc > DateTimeOffset.UtcNow));
-            public Task<IReadOnlyCollection<PersonalAccessToken>> GetTokensAsync(Guid allowedUserId, CancellationToken ct) => Task.FromResult<IReadOnlyCollection<PersonalAccessToken>>([.. Tokens.Where(x => x.AllowedUserId == allowedUserId)]);
-            public Task AddTokenAsync(PersonalAccessToken token, CancellationToken ct)
-            {
-                Tokens.Add(token);
-                return Task.CompletedTask;
-            }
-            public Task UpdateTokenAsync(PersonalAccessToken token, CancellationToken ct) => Task.CompletedTask;
-            public Task AddMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct)
-            {
-                AuditLogs.Add(auditLog);
-                return Task.CompletedTask;
-            }
-            public Task UpdateMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken ct) => Task.CompletedTask;
-            public Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken ct) => Task.FromResult(AuditLogs.Count(x => x.PersonalAccessTokenId == tokenId && x.OccurredUtc >= sinceUtc));
-            public Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken ct) => Task.FromResult(0);
-            public Task AddMobileAuthorizationRequestAsync(MobileAuthorizationRequest request, CancellationToken ct)
-            {
-                MobileAuthorizationRequests.Add(request);
-                return Task.CompletedTask;
-            }
-            public Task<MobileAuthorizationRequest?> GetMobileAuthorizationRequestAsync(Guid requestId, CancellationToken ct) =>
-                Task.FromResult<MobileAuthorizationRequest?>(MobileAuthorizationRequests.SingleOrDefault(x => x.Id == requestId));
-            public Task<MobileAuthorizationRequest?> FindMobileAuthorizationRequestByCodeHashAsync(string authorizationCodeHash, CancellationToken ct) =>
-                Task.FromResult<MobileAuthorizationRequest?>(MobileAuthorizationRequests.SingleOrDefault(x => x.AuthorizationCodeHash == authorizationCodeHash));
-            public Task UpdateMobileAuthorizationRequestAsync(MobileAuthorizationRequest request, CancellationToken ct) => Task.CompletedTask;
-            public Task AddMobileSessionAsync(MobileSession session, CancellationToken ct)
-            {
-                MobileSessions.Add(session);
-                return Task.CompletedTask;
-            }
-            public Task<MobileSession?> FindActiveMobileSessionByAccessHashAsync(string accessTokenHash, CancellationToken ct) =>
-                Task.FromResult<MobileSession?>(MobileSessions.SingleOrDefault(x => x.AccessTokenHash == accessTokenHash && x.RevokedUtc is null));
-            public Task<MobileSession?> FindActiveMobileSessionByRefreshHashAsync(string refreshTokenHash, CancellationToken ct) =>
-                Task.FromResult<MobileSession?>(MobileSessions.SingleOrDefault(x => x.RefreshTokenHash == refreshTokenHash && x.RevokedUtc is null));
-            public Task UpdateMobileSessionAsync(MobileSession session, CancellationToken ct) => Task.CompletedTask;
-
-            public Task<(IReadOnlyCollection<HealthReading> Items, int TotalCount)> GetReadingsPageAsync(
-                Guid userId,
-                Guid? templateId,
-                DateTimeOffset? fromUtc,
-                DateTimeOffset? toUtc,
-                int page,
-                int pageSize,
-                CancellationToken ct
-            )
-            {
-                var readings = Readings
-                    .Where(x =>
-                        x.UserId == userId
-                        && x.DeletedUtc is null
-                        && (!templateId.HasValue || x.TemplateId == templateId)
-                        && (!fromUtc.HasValue || x.RecordedAtUtc >= fromUtc)
-                        && (!toUtc.HasValue || x.RecordedAtUtc <= toUtc)
-                    )
-                    .OrderByDescending(x => x.RecordedAtUtc)
-                    .ToArray();
-                var skip = (long)(page - 1) * pageSize;
-                IReadOnlyCollection<HealthReading> items = skip >= readings.Length
-                    ? []
-                    : [.. readings.Skip((int)skip).Take(pageSize)];
-                return Task.FromResult((items, readings.Length));
-            }
-
-            public Task UpdateReadingAsync(HealthReading reading, CancellationToken ct)
-            {
-                return Task.CompletedTask;
-            }
-
-            public Task<int> PurgeSoftDeletedAsync(DateTimeOffset beforeUtc, CancellationToken ct)
-            {
-                return Task.FromResult(0);
-            }
-
-            public Task SaveChangesAsync(CancellationToken ct)
-            {
-                return Task.CompletedTask;
-            }
-
-            public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct)
-            {
-                return operation();
-            }
-        }
+        // Assert
+        result.Value.Should().BeApproximately(5.55m, 0.01m);
+        result.Unit.Should().Be("mmol/L");
+        result.Note.Should().Be("Fasting");
+        result.RecordedAtUtc.Should().Be(recordedAt.ToUniversalTime());
     }
+
+    [Fact]
+    public async Task Create_reading_allows_historical_timestamps()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var service = CreateService(store);
+        var recordedAt = new DateTimeOffset(2024, 1, 15, 8, 30, 0, TimeSpan.FromHours(1));
+
+        // Act
+        var result = await service.CreateReadingAsync(
+            new CreateReadingDto(
+                store.Templates.Single().Id,
+                5.2m,
+                "mmol/L",
+                recordedAt,
+                null
+            ),
+            CancellationToken.None
+        );
+
+        // Assert
+        result.RecordedAtUtc.Should().Be(recordedAt.ToUniversalTime());
+    }
+
+    [Fact]
+    public async Task Create_reading_rejects_a_note_over_140_characters()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var service = CreateService(store);
+        InvalidOperationException? exception = null;
+
+        // Act
+        try
+        {
+            await service.CreateReadingAsync(
+                new CreateReadingDto(
+                    store.Templates.Single().Id,
+                    5m,
+                    "mmol/L",
+                    DateTimeOffset.UtcNow,
+                    new string('x', 141)
+                ),
+                CancellationToken.None
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+        exception!.Message.Should().Contain("140");
+    }
+
+    [Fact]
+    public async Task Create_reading_rejects_a_timestamp_more_than_five_minutes_in_the_future()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var service = CreateService(store);
+        InvalidOperationException? exception = null;
+
+        // Act
+        try
+        {
+            await service.CreateReadingAsync(
+                new CreateReadingDto(
+                    store.Templates.Single().Id,
+                    5m,
+                    "mmol/L",
+                    DateTimeOffset.UtcNow.AddMinutes(6),
+                    null
+                ),
+                CancellationToken.None
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+        exception!.Message.Should().Contain("invalid");
+    }
+
+    [Fact]
+    public async Task Create_custom_template_tracks_it_and_keeps_its_custom_unit()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var service = CreateService(store);
+
+        // Act
+        var template = await service.CreateCustomTemplateAsync(
+            new CreateCustomTemplateDto("Sleep quality", "Lifestyle", "score"),
+            CancellationToken.None
+        );
+
+        // Assert
+        template.IsCustom.Should().BeTrue();
+        template.IsTracked.Should().BeTrue();
+        template.NormalizedUnit.Should().Be("score");
+        store.Trackings.Should().ContainSingle(item => item.TemplateId == template.Id);
+    }
+
+    [Fact]
+    public async Task Create_custom_reading_preserves_the_custom_value_and_unit()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var template = CustomTemplate(store.CurrentUser.Id, "Sleep quality");
+        store.Templates.Add(template);
+        store.Trackings.Add(
+            new UserTrackedTemplate
+            {
+                UserId = store.CurrentUser.Id,
+                TemplateId = template.Id,
+                Template = template,
+            }
+        );
+        var service = CreateService(store);
+
+        // Act
+        var reading = await service.CreateReadingAsync(
+            new CreateReadingDto(
+                template.Id,
+                8.5m,
+                "score",
+                DateTimeOffset.UtcNow.AddDays(-1),
+                "Good"
+            ),
+            CancellationToken.None
+        );
+
+        // Assert
+        reading.Value.Should().Be(8.5m);
+        reading.Unit.Should().Be("score");
+        reading.Note.Should().Be("Good");
+    }
+
+    [Fact]
+    public async Task Update_custom_template_changes_the_public_template_contract()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var service = CreateService(store);
+        var created = await service.CreateCustomTemplateAsync(
+            new CreateCustomTemplateDto("Sleep quality", "Lifestyle", "score"),
+            CancellationToken.None
+        );
+
+        // Act
+        var updated = await service.UpdateCustomTemplateAsync(
+            created.Id,
+            new UpdateCustomTemplateDto("Sleep duration", "Lifestyle", "hours"),
+            CancellationToken.None
+        );
+
+        // Assert
+        updated.Name.Should().Be("Sleep duration");
+        updated.NormalizedUnit.Should().Be("hours");
+        updated.IsTracked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Delete_custom_template_soft_deletes_the_template_and_tracking()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var template = CustomTemplate(store.CurrentUser.Id, "Sleep quality");
+        store.Templates.Add(template);
+        store.Trackings.Add(
+            new UserTrackedTemplate
+            {
+                UserId = store.CurrentUser.Id,
+                TemplateId = template.Id,
+                Template = template,
+            }
+        );
+        var service = CreateService(store);
+
+        // Act
+        await service.DeleteCustomTemplateAsync(template.Id, CancellationToken.None);
+
+        // Assert
+        template.DeletedUtc.Should().NotBeNull();
+        store.Trackings.Single().DeletedUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Track_template_reactivates_a_soft_deleted_tracking_selection()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var template = BuiltInTemplates.All.Single(item => item.Code == "weight");
+        store.Templates.Add(template);
+        store.Trackings.Add(
+            new UserTrackedTemplate
+            {
+                UserId = store.CurrentUser.Id,
+                TemplateId = template.Id,
+                Template = template,
+                DeletedUtc = DateTimeOffset.UtcNow.AddDays(-1),
+            }
+        );
+        var service = CreateService(store);
+
+        // Act
+        await service.TrackTemplateAsync(template.Id, CancellationToken.None);
+
+        // Assert
+        store.Trackings.Single().DeletedUtc.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Update_reading_normalizes_the_new_unit_and_note()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var template = store.Templates.Single();
+        var reading = new HealthReading
+        {
+            UserId = store.CurrentUser.Id,
+            TemplateId = template.Id,
+            TemplateName = template.Name,
+            Value = 5m,
+            Unit = template.NormalizedUnit,
+            RecordedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+        };
+        store.Readings.Add(reading);
+        var service = CreateService(store);
+
+        // Act
+        var updated = await service.UpdateReadingAsync(
+            reading.Id,
+            new UpdateReadingDto(180.182m, "mg/dL", DateTimeOffset.UtcNow.AddDays(-2), "Updated"),
+            CancellationToken.None
+        );
+
+        // Assert
+        updated.Value.Should().BeApproximately(10m, 0.001m);
+        updated.Unit.Should().Be("mmol/L");
+        updated.Note.Should().Be("Updated");
+    }
+
+    [Fact]
+    public async Task Get_readings_applies_template_and_date_filters()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var template = store.Templates.Single();
+        var inRange = new HealthReading
+        {
+            UserId = store.CurrentUser.Id,
+            TemplateId = template.Id,
+            TemplateName = template.Name,
+            Value = 5m,
+            Unit = template.NormalizedUnit,
+            RecordedAtUtc = new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero),
+        };
+        store.Readings.AddRange(
+            inRange,
+            new HealthReading
+            {
+                UserId = store.CurrentUser.Id,
+                TemplateId = template.Id,
+                TemplateName = template.Name,
+                Value = 6m,
+                Unit = template.NormalizedUnit,
+                RecordedAtUtc = new DateTimeOffset(2024, 1, 10, 0, 0, 0, TimeSpan.Zero),
+            }
+        );
+        var service = CreateService(store);
+
+        // Act
+        var readings = await service.GetReadingsAsync(
+            template.Id,
+            new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2024, 1, 3, 0, 0, 0, TimeSpan.Zero),
+            CancellationToken.None
+        );
+
+        // Assert
+        var onlyReading = readings.Should().ContainSingle().Subject;
+        onlyReading.Id.Should().Be(inRange.Id);
+    }
+
+    [Fact]
+    public async Task Get_tracked_templates_returns_only_active_user_tracking()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var active = BuiltInTemplates.All.Single(item => item.Code == "weight");
+        var deleted = BuiltInTemplates.All.Single(item => item.Code == "urate");
+        store.Templates.AddRange(active, deleted);
+        store.Trackings.AddRange(
+            new UserTrackedTemplate
+            {
+                UserId = store.CurrentUser.Id,
+                TemplateId = active.Id,
+                Template = active,
+            },
+            new UserTrackedTemplate
+            {
+                UserId = store.CurrentUser.Id,
+                TemplateId = deleted.Id,
+                Template = deleted,
+                DeletedUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            }
+        );
+        var service = CreateService(store);
+
+        // Act
+        var templates = await service.GetTrackedTemplatesAsync(CancellationToken.None);
+
+        // Assert
+        var onlyTemplate = templates.Should().ContainSingle().Subject;
+        onlyTemplate.Id.Should().Be(active.Id);
+    }
+
+    [Fact]
+    public async Task Create_reading_rejects_values_outside_the_supported_range()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var service = CreateService(store);
+        InvalidOperationException? exception = null;
+
+        // Act
+        try
+        {
+            await service.CreateReadingAsync(
+                new CreateReadingDto(
+                    store.Templates.Single().Id,
+                    -1m,
+                    "mmol/L",
+                    DateTimeOffset.UtcNow,
+                    null
+                ),
+                CancellationToken.None
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+        exception!.Message.Should().Contain("invalid");
+    }
+
+    [Fact]
+    public async Task Reading_operations_cannot_access_another_users_reading()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var template = store.Templates.Single();
+        var reading = new HealthReading
+        {
+            UserId = Guid.NewGuid(),
+            TemplateId = template.Id,
+            TemplateName = template.Name,
+            Value = 5m,
+            Unit = template.NormalizedUnit,
+            RecordedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+        };
+        store.Readings.Add(reading);
+        var service = CreateService(store);
+        KeyNotFoundException? exception = null;
+
+        // Act
+        try
+        {
+            await service.DeleteReadingAsync(reading.Id, CancellationToken.None);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+        reading.DeletedUtc.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Delete_reading_soft_deletes_the_owned_reading()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var template = store.Templates.Single();
+        var reading = new HealthReading
+        {
+            UserId = store.CurrentUser.Id,
+            TemplateId = template.Id,
+            TemplateName = template.Name,
+            Value = 5m,
+            Unit = template.NormalizedUnit,
+            RecordedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+        };
+        store.Readings.Add(reading);
+        var service = CreateService(store);
+
+        // Act
+        await service.DeleteReadingAsync(reading.Id, CancellationToken.None);
+
+        // Assert
+        reading.DeletedUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Non_administrators_cannot_list_allowed_users()
+    {
+        // Arrange
+        var store = new TestDataStore(role: AllowedUserRole.Member);
+        var service = CreateService(store);
+        UnauthorizedAccessException? exception = null;
+
+        // Act
+        try
+        {
+            await service.GetAllowedUsersAsync(false, CancellationToken.None);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Unknown_current_subject_cannot_read_health_data()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var service = new HealthTrackerService(
+            store,
+            new TestCurrentUser(subject: "", email: "test@example.com")
+        );
+        UnauthorizedAccessException? exception = null;
+
+        // Act
+        try
+        {
+            await service.GetCatalogueAsync(CancellationToken.None);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Catalogue_excludes_another_users_custom_template()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var ownTemplate = CustomTemplate(store.CurrentUser.Id, "Own metric");
+        var otherTemplate = CustomTemplate(Guid.NewGuid(), "Private metric");
+        store.Templates.AddRange([ownTemplate, otherTemplate]);
+        var service = CreateService(store);
+
+        // Act
+        var catalogue = await service.GetCatalogueAsync(CancellationToken.None);
+
+        // Assert
+        catalogue.Should().Contain(item => item.Id == ownTemplate.Id);
+        catalogue.Should().NotContain(item => item.Id == otherTemplate.Id);
+    }
+
+    [Fact]
+    public async Task Stop_tracking_soft_deletes_tracking_without_deleting_readings()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var template = store.Templates.Single();
+        store.Readings.Add(
+            new HealthReading
+            {
+                UserId = store.CurrentUser.Id,
+                TemplateId = template.Id,
+                TemplateName = template.Name,
+                Value = 5.2m,
+                Unit = template.NormalizedUnit,
+                RecordedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+            }
+        );
+        var service = CreateService(store);
+
+        // Act
+        await service.StopTrackingAsync(template.Id, CancellationToken.None);
+
+        // Assert
+        store.Trackings.Single().DeletedUtc.Should().NotBeNull();
+        store.Readings.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Reading_page_filters_and_reports_total_count()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var template = store.Templates.Single();
+        store.Readings.AddRange(
+            Enumerable
+                .Range(1, 3)
+                .Select(index => new HealthReading
+                {
+                    UserId = store.CurrentUser.Id,
+                    TemplateId = template.Id,
+                    TemplateName = template.Name,
+                    Value = index,
+                    Unit = template.NormalizedUnit,
+                    RecordedAtUtc = DateTimeOffset.UtcNow.AddDays(-index),
+                })
+        );
+        var service = CreateService(store);
+
+        // Act
+        var page = await service.GetReadingPageAsync(
+            template.Id,
+            null,
+            null,
+            2,
+            2,
+            CancellationToken.None
+        );
+
+        // Assert
+        page.TotalCount.Should().Be(3);
+        page.Items.Should().ContainSingle();
+        page.Page.Should().Be(2);
+        page.PageSize.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Metric_summaries_report_latest_value_and_change()
+    {
+        // Arrange
+        var store = CreateStoreWithTrackedBuiltIn("glucose");
+        var template = store.Templates.Single();
+        store.Readings.AddRange(
+            [
+                new HealthReading
+                {
+                    UserId = store.CurrentUser.Id,
+                    TemplateId = template.Id,
+                    TemplateName = template.Name,
+                    Value = 6m,
+                    Unit = template.NormalizedUnit,
+                    RecordedAtUtc = DateTimeOffset.UtcNow.AddDays(-1),
+                },
+                new HealthReading
+                {
+                    UserId = store.CurrentUser.Id,
+                    TemplateId = template.Id,
+                    TemplateName = template.Name,
+                    Value = 5m,
+                    Unit = template.NormalizedUnit,
+                    RecordedAtUtc = DateTimeOffset.UtcNow.AddDays(-2),
+                },
+            ]
+        );
+        var service = CreateService(store);
+
+        // Act
+        var summaries = await service.GetMetricSummariesAsync(CancellationToken.None);
+
+        // Assert
+        var summary = summaries.Should().ContainSingle().Subject;
+        summary.LatestValue.Should().Be(6m);
+        summary.ChangeFromPrevious.Should().Be(1m);
+    }
+
+    [Fact]
+    public async Task Allowed_user_can_be_archived_and_reactivated_case_insensitively()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var service = CreateService(store);
+        var added = await service.AddAllowedUserAsync(
+            new AddAllowedUserDto("Family@Example.com", "Member"),
+            CancellationToken.None
+        );
+        await service.ArchiveAllowedUserAsync(added.Id, CancellationToken.None);
+
+        // Act
+        var reactivated = await service.AddAllowedUserAsync(
+            new AddAllowedUserDto("family@example.com", "Admin"),
+            CancellationToken.None
+        );
+
+        // Assert
+        reactivated.Id.Should().Be(added.Id);
+        reactivated.Role.Should().Be("Admin");
+        reactivated.IsArchived.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Archiving_a_user_revokes_tokens_that_reactivation_does_not_restore()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var service = CreateService(store);
+        var user = await service.AddAllowedUserAsync(
+            new AddAllowedUserDto("Family@Example.com", "Member"),
+            CancellationToken.None
+        );
+        var token = new PersonalAccessToken
+        {
+            AllowedUserId = user.Id,
+            Hash = "test-hash",
+            ExpiresUtc = DateTimeOffset.UtcNow.AddDays(1),
+        };
+        store.Tokens.Add(token);
+
+        // Act
+        await service.ArchiveAllowedUserAsync(user.Id, CancellationToken.None);
+
+        // Assert
+        token.RevokedUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Last_administrator_cannot_be_archived()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var service = CreateService(store);
+        InvalidOperationException? exception = null;
+
+        // Act
+        try
+        {
+            await service.ArchiveAllowedUserAsync(
+                store.CurrentAllowedUser.Id,
+                CancellationToken.None
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+        exception!.Message.Should().Contain("administrator");
+    }
+
+    [Fact]
+    public async Task Last_administrator_cannot_be_demoted()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var service = CreateService(store);
+        InvalidOperationException? exception = null;
+
+        // Act
+        try
+        {
+            await service.UpdateAllowedUserRoleAsync(
+                store.CurrentAllowedUser.Id,
+                new UpdateAllowedUserRoleDto("Member"),
+                CancellationToken.None
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+        exception!.Message.Should().Contain("administrator");
+    }
+
+    [Fact]
+    public async Task Execute_in_transaction_delegates_to_the_data_store()
+    {
+        // Arrange
+        var store = new TestDataStore();
+        var service = CreateService(store);
+
+        // Act
+        var result = await service.ExecuteInTransactionAsync(
+            () => Task.FromResult("committed"),
+            CancellationToken.None
+        );
+
+        // Assert
+        result.Should().Be("committed");
+        store.TransactionCount.Should().Be(1);
+    }
+
+    private static TestDataStore CreateStoreWithTrackedBuiltIn(string code)
+    {
+        var store = new TestDataStore();
+        var template = BuiltInTemplates.All.Single(item => item.Code == code);
+        store.Templates.Add(template);
+        store.Trackings.Add(
+            new UserTrackedTemplate
+            {
+                UserId = store.CurrentUser.Id,
+                TemplateId = template.Id,
+                Template = template,
+            }
+        );
+        return store;
+    }
+
+    private static HealthTrackerService CreateService(TestDataStore store) =>
+        new(store, new TestCurrentUser());
+
+    private static MeasurementTemplate CustomTemplate(Guid ownerUserId, string name) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = ownerUserId,
+            Name = name,
+            Category = "Custom",
+            NormalizedUnit = "unit",
+            AllowedUnits = ["unit"],
+        };
 }

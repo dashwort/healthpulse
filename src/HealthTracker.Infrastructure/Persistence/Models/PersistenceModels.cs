@@ -44,6 +44,18 @@ namespace HealthTracker.Infrastructure.Persistence.Models
         public DateTimeOffset OccurredUtc { get; set; }
     }
 
+    public sealed class AccessActivityRecord
+    {
+        public Guid Id { get; set; }
+        public Guid? AllowedUserId { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string Outcome { get; set; } = string.Empty;
+        public string? FailureReason { get; set; }
+        public DateTimeOffset OccurredUtc { get; set; }
+        public string? SourceIpAddress { get; set; }
+        public string? UserAgent { get; set; }
+    }
+
     public sealed class MobileAuthorizationRequestRecord
     {
         public Guid Id { get; set; }

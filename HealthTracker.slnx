@@ -8,5 +8,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/HealthTracker.Application.Tests/HealthTracker.Application.Tests.csproj" />
+    <Project Path="tests/HealthTracker.Testing/HealthTracker.Testing.csproj" />
+    <Project Path="tests/HealthTracker.Web.Tests/HealthTracker.Web.Tests.csproj" />
   </Folder>
 </Solution>

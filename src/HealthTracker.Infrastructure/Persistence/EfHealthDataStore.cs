@@ -283,6 +283,52 @@ namespace HealthTracker.Infrastructure.Persistence
             return logs.Count;
         }
 
+        public Task AddAccessActivityAsync(AccessActivity activity, CancellationToken ct)
+        {
+            return db.AccessActivities.AddAsync(activity.ToRecord(), ct).AsTask();
+        }
+
+        public async Task<(IReadOnlyCollection<AccessActivity> Items, int TotalCount)> GetAccessActivitiesPageAsync(
+            Guid? allowedUserId,
+            AccessActivityType? type,
+            AccessActivityOutcome? outcome,
+            int page,
+            int pageSize,
+            CancellationToken ct
+        )
+        {
+            var query = db.AccessActivities.AsNoTracking().Where(x =>
+                (!allowedUserId.HasValue || x.AllowedUserId == allowedUserId)
+                && (!type.HasValue || x.Type == type.Value.ToString())
+                && (!outcome.HasValue || x.Outcome == outcome.Value.ToString())
+            );
+            var totalCount = await query.CountAsync(ct);
+            var skip = (long)(page - 1) * pageSize;
+            if (skip >= totalCount)
+            {
+                return (Array.Empty<AccessActivity>(), totalCount);
+            }
+
+            var items = await query
+                .OrderByDescending(x => x.OccurredUtc)
+                .Skip((int)skip)
+                .Take(pageSize)
+                .ToArrayAsync(ct);
+            return ([.. items.Select(x => x.ToDomain())], totalCount);
+        }
+
+        public async Task<int> PurgeAccessActivitiesAsync(DateTimeOffset beforeUtc, CancellationToken ct)
+        {
+            // SQLite's DateTimeOffset comparisons are not consistently translated. Audit retention
+            // is short, so compare the narrow in-memory set after loading it.
+            var activities = (await db.AccessActivities.ToListAsync(ct))
+                .Where(activity => activity.OccurredUtc < beforeUtc)
+                .ToArray();
+            db.AccessActivities.RemoveRange(activities);
+            await db.SaveChangesAsync(ct);
+            return activities.Length;
+        }
+
         public Task AddMobileAuthorizationRequestAsync(
             MobileAuthorizationRequest request,
             CancellationToken ct

@@ -30,6 +30,7 @@ ENV ASPNETCORE_ENVIRONMENT=Production \
     Authentication__OpenIdConnect__Authority="" \
     Authentication__OpenIdConnect__ClientId="" \
     Authentication__OpenIdConnect__ClientSecret="" \
+    AccessActivity__TrustedProxyNetworks__0="" \
     Mobile__Android__LatestVersion="" \
     Mobile__Android__ApkUrl="" \
     Mobile__Android__ReleaseNotes="" \

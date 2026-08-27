@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 
 using MudBlazor.Services;
@@ -55,6 +56,10 @@ builder.Logging.AddProvider(
 var oidc =
     builder.Configuration.GetSection(ExternalOidcSettings.SectionName).Get<ExternalOidcSettings>()
     ?? new ExternalOidcSettings();
+var accessActivityOptions =
+    builder.Configuration.GetSection(AccessActivityOptions.SectionName).Get<AccessActivityOptions>()
+    ?? new AccessActivityOptions();
+const string AccessActivityRecordedItemKey = "HealthPulse.AccessActivityRecorded";
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddControllers();
 builder.Services.Configure<DeploymentInfo>(
@@ -74,6 +79,7 @@ builder.Services.AddHttpClient<MobileReleaseService>(client =>
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 builder.Services.AddScoped<AccessControlAuthorizationHandler>();
 builder.Services.AddScoped<HealthTrackerService>();
+builder.Services.AddScoped<AccessActivityService>();
 builder.Services.AddScoped<PersonalAccessTokenService>();
 builder.Services.AddScoped<MobileAuthenticationService>();
 builder.Services.AddMudServices();
@@ -83,6 +89,19 @@ builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("HealthTracker")
         ?? throw new InvalidOperationException("ConnectionStrings:HealthTracker is required.")
 );
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardedForHeaderName = "CF-Connecting-IP";
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    foreach (var network in accessActivityOptions.TrustedProxyNetworks.Where(
+        value => !string.IsNullOrWhiteSpace(value)
+    ))
+    {
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    }
+});
 var usesDevelopmentAuthentication =
     builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(oidc.Authority);
 if (usesDevelopmentAuthentication)
@@ -131,6 +150,7 @@ else
             {
                 OnTokenValidated = async context =>
                 {
+                    var auditService = context.HttpContext.RequestServices.GetRequiredService<AccessActivityService>();
                     var email =
                         context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
                         ?? context.Principal?.FindFirst("email")?.Value;
@@ -140,27 +160,73 @@ else
                         || !string.Equals(emailVerified, "true", StringComparison.OrdinalIgnoreCase)
                     )
                     {
+                        await auditService.RecordAsync(
+                            AccessActivityRequestDetails.Create(
+                                context.HttpContext,
+                                null,
+                                HealthTracker.Domain.Models.AccessActivityType.WebSignIn,
+                                HealthTracker.Domain.Models.AccessActivityOutcome.Failure,
+                                HealthTracker.Domain.Models.AccessActivityFailureReason.EmailNotVerified
+                            ),
+                            context.HttpContext.RequestAborted
+                        );
+                        context.HttpContext.Items[AccessActivityRecordedItemKey] = true;
                         context.Fail("Sign-in failed.");
                         return;
                     }
 
                     var dataStore = context.HttpContext.RequestServices.GetRequiredService<IHealthDataStore>();
-                    if (
-                        await dataStore.FindAllowedUserByEmailAsync(
-                            email.Trim().ToUpperInvariant(),
-                            false,
-                            context.HttpContext.RequestAborted
-                        ) is null
-                    )
+                    var allowedUser = await dataStore.FindAllowedUserByEmailAsync(
+                        email.Trim().ToUpperInvariant(),
+                        false,
+                        context.HttpContext.RequestAborted
+                    );
+                    if (allowedUser is null)
                     {
+                        await auditService.RecordAsync(
+                            AccessActivityRequestDetails.Create(
+                                context.HttpContext,
+                                null,
+                                HealthTracker.Domain.Models.AccessActivityType.WebSignIn,
+                                HealthTracker.Domain.Models.AccessActivityOutcome.Failure,
+                                HealthTracker.Domain.Models.AccessActivityFailureReason.NotAllowed
+                            ),
+                            context.HttpContext.RequestAborted
+                        );
+                        context.HttpContext.Items[AccessActivityRecordedItemKey] = true;
                         context.Fail("Sign-in failed.");
+                        return;
                     }
+
+                    await auditService.RecordAsync(
+                        AccessActivityRequestDetails.Create(
+                            context.HttpContext,
+                            allowedUser.Id,
+                            HealthTracker.Domain.Models.AccessActivityType.WebSignIn,
+                            HealthTracker.Domain.Models.AccessActivityOutcome.Success
+                        ),
+                        context.HttpContext.RequestAborted
+                    );
+                    context.HttpContext.Items[AccessActivityRecordedItemKey] = true;
                 },
-                OnRemoteFailure = context =>
+                OnRemoteFailure = async context =>
                 {
+                    if (!context.HttpContext.Items.ContainsKey(AccessActivityRecordedItemKey))
+                    {
+                        var auditService = context.HttpContext.RequestServices.GetRequiredService<AccessActivityService>();
+                        await auditService.RecordAsync(
+                            AccessActivityRequestDetails.Create(
+                                context.HttpContext,
+                                null,
+                                HealthTracker.Domain.Models.AccessActivityType.WebSignIn,
+                                HealthTracker.Domain.Models.AccessActivityOutcome.Failure,
+                                HealthTracker.Domain.Models.AccessActivityFailureReason.ProviderFailure
+                            ),
+                            context.HttpContext.RequestAborted
+                        );
+                    }
                     context.Response.Redirect("/Error");
                     context.HandleResponse();
-                    return Task.CompletedTask;
                 },
             };
             foreach (var scope in oidc.Scopes)
@@ -230,6 +296,7 @@ using (var scope = app.Services.CreateScope())
 }
 startupLogger.LogInformation("HealthPulse startup checks completed.");
 
+app.UseForwardedHeaders();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -321,3 +388,5 @@ app.MapControllers();
 app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = "PersonalAccessToken" });
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();
+
+public partial class Program { }

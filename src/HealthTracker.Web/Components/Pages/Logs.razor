@@ -2,6 +2,8 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Administrator")]
 @using HealthTracker.Web.Services
 @inject ApplicationLogService LogService
+@inject AccessActivityService AccessActivityService
+@inject HealthTrackerService Tracker
 @inject ILogger<Logs> Logger
 
 <PageTitle>Application logs · HealthPulse</PageTitle>
@@ -21,6 +23,82 @@
 <MudAlert Severity="Severity.Info" Class="mb-4">
     Logs are retained on the server under durable application storage. They include request, startup, authentication, database, SignalR, and Blazor circuit diagnostics, but not request bodies or query strings. Access is restricted to administrators.
 </MudAlert>
+
+<MudPaper Class="pa-4 mb-5" Elevation="0">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3 log-meta">
+        <div>
+            <MudText Typo="Typo.h5">Access activity</MudText>
+            <MudText Typo="Typo.body2" Color="MudBlazor.Color.Secondary">Successful and failed web sign-ins and approved Android authorizations. IP addresses and user agents are retained for seven days.</MudText>
+        </div>
+        <MudButton OnClick="ApplyFiltersAsync" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FilterAlt">Apply filters</MudButton>
+    </MudStack>
+    <MudGrid Class="mb-3">
+        <MudItem xs="12" md="4">
+            <MudSelect T="string" Label="User" @bind-Value="selectedUserId" Dense="true">
+                <MudSelectItem T="string" Value="@string.Empty">All users</MudSelectItem>
+                @if (users is not null)
+                {
+                    @foreach (var user in users)
+                    {
+                        <MudSelectItem T="string" Value="@user.Id.ToString()">@user.Email</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSelect T="string" Label="Event" @bind-Value="selectedType" Dense="true">
+                <MudSelectItem T="string" Value="@string.Empty">All events</MudSelectItem>
+                <MudSelectItem T="string" Value="@("WebSignIn")">Web sign-in</MudSelectItem>
+                <MudSelectItem T="string" Value="@("AndroidAuthorization")">Android authorization</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSelect T="string" Label="Result" @bind-Value="selectedOutcome" Dense="true">
+                <MudSelectItem T="string" Value="@string.Empty">All results</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Success")">Success</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Failure")">Failure</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+    @if (activity is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="MudBlazor.Color.Primary" />
+    }
+    else if (activity.Items.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">No access activity matches these filters.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="activity.Items" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                <MudTh>When</MudTh><MudTh>User</MudTh><MudTh>Event</MudTh><MudTh>Result</MudTh><MudTh>IP address</MudTh><MudTh>User agent</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="When">@context.OccurredUtc.ToLocalTime().ToString("g")</MudTd>
+                <MudTd DataLabel="User">@(context.UserEmail ?? "Unattributed")</MudTd>
+                <MudTd DataLabel="Event">@FormatType(context.Type)</MudTd>
+                <MudTd DataLabel="Result">@FormatOutcome(context)</MudTd>
+                <MudTd DataLabel="IP address">@(context.SourceIpAddress ?? "—")</MudTd>
+                <MudTd DataLabel="User agent">
+                    @if (context.UserAgent is { Length: > 0 } userAgent)
+                    {
+                        <MudTooltip Text="@userAgent">@Truncate(userAgent, 80)</MudTooltip>
+                    }
+                    else
+                    {
+                        @:—
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-3">
+            <MudButton Disabled="@(activity.Page <= 1)" OnClick="PreviousPageAsync" Variant="Variant.Text">Previous</MudButton>
+            <MudText Typo="Typo.caption">Page @activity.Page · @activity.TotalCount event(s)</MudText>
+            <MudButton Disabled="@(activity.Page * activity.PageSize >= activity.TotalCount)" OnClick="NextPageAsync" Variant="Variant.Text">Next</MudButton>
+        </MudStack>
+    }
+</MudPaper>
 
 <MudPaper Class="pa-3 log-viewer" Elevation="0">
     @if (loading && snapshot is null)
@@ -43,8 +121,14 @@
 
 @code {
     private ApplicationLogSnapshot? snapshot;
+    private AccessActivityPageDto? activity;
+    private IReadOnlyCollection<AllowedUserDto>? users;
     private string? error;
     private bool loading;
+    private int activityPage = 1;
+    private string selectedUserId = string.Empty;
+    private string selectedType = string.Empty;
+    private string selectedOutcome = string.Empty;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -55,6 +139,8 @@
         try
         {
             snapshot = await LogService.ReadForViewerAsync(CancellationToken.None);
+            users = await Tracker.GetAllowedUsersAsync(true, CancellationToken.None);
+            await LoadActivityAsync();
         }
         catch (Exception exception)
         {
@@ -66,4 +152,56 @@
             loading = false;
         }
     }
+
+    private async Task ApplyFiltersAsync()
+    {
+        activityPage = 1;
+        await LoadActivityAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (activityPage > 1)
+        {
+            activityPage--;
+            await LoadActivityAsync();
+        }
+    }
+
+    private async Task NextPageAsync()
+    {
+        activityPage++;
+        await LoadActivityAsync();
+    }
+
+    private async Task LoadActivityAsync()
+    {
+        activity = await AccessActivityService.GetPageAsync(
+            Guid.TryParse(selectedUserId, out var userId) ? userId : null,
+            Enum.TryParse<HealthTracker.Domain.Models.AccessActivityType>(selectedType, out var type)
+                ? type
+                : null,
+            Enum.TryParse<HealthTracker.Domain.Models.AccessActivityOutcome>(selectedOutcome, out var outcome)
+                ? outcome
+                : null,
+            activityPage,
+            50,
+            CancellationToken.None
+        );
+    }
+
+    private static string FormatType(string type) => type switch
+    {
+        "WebSignIn" => "Web sign-in",
+        "AndroidAuthorization" => "Android authorization",
+        _ => type,
+    };
+
+    private static string FormatOutcome(AccessActivityDto item) => item.FailureReason is { Length: > 0 }
+        ? $"{item.Outcome} ({item.FailureReason})"
+        : item.Outcome;
+
+    private static string Truncate(string value, int maximumLength) => value.Length <= maximumLength
+        ? value
+        : value[..maximumLength] + "…";
 }

@@ -188,6 +188,38 @@ namespace HealthTracker.Infrastructure.Persistence.Mappings
             target.DeletedUtc = source.DeletedUtc;
         }
 
+        public static AccessActivity ToDomain(this AccessActivityRecord record)
+        {
+            return new()
+            {
+                Id = record.Id,
+                AllowedUserId = record.AllowedUserId,
+                Type = Enum.Parse<AccessActivityType>(record.Type),
+                Outcome = Enum.Parse<AccessActivityOutcome>(record.Outcome),
+                FailureReason = string.IsNullOrEmpty(record.FailureReason)
+                    ? null
+                    : Enum.Parse<AccessActivityFailureReason>(record.FailureReason),
+                OccurredUtc = record.OccurredUtc,
+                SourceIpAddress = record.SourceIpAddress,
+                UserAgent = record.UserAgent,
+            };
+        }
+
+        public static AccessActivityRecord ToRecord(this AccessActivity activity)
+        {
+            return new()
+            {
+                Id = activity.Id,
+                AllowedUserId = activity.AllowedUserId,
+                Type = activity.Type.ToString(),
+                Outcome = activity.Outcome.ToString(),
+                FailureReason = activity.FailureReason?.ToString(),
+                OccurredUtc = activity.OccurredUtc,
+                SourceIpAddress = activity.SourceIpAddress,
+                UserAgent = activity.UserAgent,
+            };
+        }
+
         public static MobileAuthorizationRequest ToDomain(
             this MobileAuthorizationRequestRecord record
         )

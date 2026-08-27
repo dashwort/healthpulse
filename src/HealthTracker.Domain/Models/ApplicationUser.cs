@@ -49,4 +49,39 @@ namespace HealthTracker.Domain.Models
         public string Outcome { get; set; } = string.Empty;
         public DateTimeOffset OccurredUtc { get; set; } = DateTimeOffset.UtcNow;
     }
+
+    public enum AccessActivityType
+    {
+        WebSignIn,
+        AndroidAuthorization,
+    }
+
+    public enum AccessActivityOutcome
+    {
+        Success,
+        Failure,
+    }
+
+    public enum AccessActivityFailureReason
+    {
+        EmailNotVerified,
+        NotAllowed,
+        ProviderFailure,
+    }
+
+    /// <summary>
+    /// A short-lived, metadata-only record of an authentication outcome. It deliberately contains
+    /// no request content, credentials, or health data.
+    /// </summary>
+    public sealed class AccessActivity
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid? AllowedUserId { get; set; }
+        public AccessActivityType Type { get; set; }
+        public AccessActivityOutcome Outcome { get; set; }
+        public AccessActivityFailureReason? FailureReason { get; set; }
+        public DateTimeOffset OccurredUtc { get; set; } = DateTimeOffset.UtcNow;
+        public string? SourceIpAddress { get; set; }
+        public string? UserAgent { get; set; }
+    }
 }

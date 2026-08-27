@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\HealthTracker.Application\HealthTracker.Application.csproj" />
+        <ProjectReference Include="..\..\src\HealthTracker.Domain\HealthTracker.Domain.csproj" />
+    </ItemGroup>
+</Project>

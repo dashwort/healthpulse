@@ -6,7 +6,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -15,12 +14,15 @@ import java.security.SecureRandom
 import java.time.Instant
 import java.util.Base64
 
-class HealthPulseRepository(context: Context) {
+class HealthPulseRepository(
+    context: Context,
+    private val credentials: CredentialStore = SecureStore(context.applicationContext),
+    private val httpClient: HealthPulseHttpClient = UrlConnectionHealthPulseHttpClient()
+) : HealthPulseRepositoryPort {
     private val applicationContext = context.applicationContext
-    private val credentials = SecureStore(applicationContext)
     private val cacheFile = File(applicationContext.filesDir, "healthpulse-cache.json")
 
-    fun load(): AppSnapshot {
+    override fun load(): AppSnapshot {
         val root = readCache()
         return AppSnapshot(
             serverUrl = credentials.getString(SERVER_URL, null),
@@ -36,7 +38,7 @@ class HealthPulseRepository(context: Context) {
         )
     }
 
-    fun configureServer(rawServerUrl: String) {
+    override fun configureServer(rawServerUrl: String) {
         val normalized = rawServerUrl.trim().trimEnd('/')
         credentials.putString(SERVER_URL, normalized)
         credentials.remove(ACCESS_TOKEN)
@@ -47,12 +49,12 @@ class HealthPulseRepository(context: Context) {
         cacheFile.delete()
     }
 
-    fun signOutAndClearData() {
+    override fun signOutAndClearData() {
         credentials.clear()
         cacheFile.delete()
     }
 
-    fun authorizationUrl(): String {
+    override fun authorizationUrl(): String {
         val server = requireServer()
         val state = randomToken(24)
         val verifier = randomToken(48)
@@ -64,7 +66,7 @@ class HealthPulseRepository(context: Context) {
             "&state=" + encode(state) + "&redirect_uri=" + encode(REDIRECT_URI)
     }
 
-    suspend fun completeSignIn(callbackUri: String): AppSnapshot = withContext(Dispatchers.IO) {
+    override suspend fun completeSignIn(callbackUri: String): AppSnapshot = withContext(Dispatchers.IO) {
         val uri = URI(callbackUri)
         val values = uri.rawQuery
             ?.split("&")
@@ -97,7 +99,7 @@ class HealthPulseRepository(context: Context) {
         sync()
     }
 
-    suspend fun sync(): AppSnapshot = withContext(Dispatchers.IO) {
+    override suspend fun sync(): AppSnapshot = withContext(Dispatchers.IO) {
         require(credentials.contains(REFRESH_TOKEN)) { "Sign in before synchronising." }
         flushQueue()
         val templates = getAuthorizedArray("/api/templates/catalogue").toTemplates()
@@ -117,7 +119,7 @@ class HealthPulseRepository(context: Context) {
         snapshot(SyncStatus.UP_TO_DATE)
     }
 
-    fun addReading(
+    override fun addReading(
         template: HealthTemplate,
         value: Double,
         note: String?,
@@ -154,7 +156,7 @@ class HealthPulseRepository(context: Context) {
         return snapshot(SyncStatus.CHANGES_QUEUED)
     }
 
-    fun updateReading(reading: HealthReading): AppSnapshot {
+    override fun updateReading(reading: HealthReading): AppSnapshot {
         val root = readCache()
         val readings = root.optJSONArray("readings").orEmpty()
         for (index in 0 until readings.length()) {
@@ -179,7 +181,7 @@ class HealthPulseRepository(context: Context) {
         return snapshot(SyncStatus.CHANGES_QUEUED)
     }
 
-    fun deleteReading(readingId: String): AppSnapshot {
+    override fun deleteReading(readingId: String): AppSnapshot {
         val root = readCache()
         val remaining = JSONArray()
         root.optJSONArray("readings").orEmpty().forEachObject {
@@ -196,7 +198,7 @@ class HealthPulseRepository(context: Context) {
         return snapshot(SyncStatus.CHANGES_QUEUED)
     }
 
-    fun setTracking(template: HealthTemplate, shouldTrack: Boolean): AppSnapshot {
+    override fun setTracking(template: HealthTemplate, shouldTrack: Boolean): AppSnapshot {
         val root = readCache()
         val templates = root.optJSONArray("templates").orEmpty()
         for (index in 0 until templates.length()) {
@@ -220,7 +222,7 @@ class HealthPulseRepository(context: Context) {
         return snapshot(SyncStatus.CHANGES_QUEUED)
     }
 
-    fun saveReminder(reminder: Reminder): AppSnapshot {
+    override fun saveReminder(reminder: Reminder): AppSnapshot {
         val root = readCache()
         val reminders = JSONArray()
         root.optJSONArray("reminders").orEmpty().forEachObject {
@@ -232,8 +234,13 @@ class HealthPulseRepository(context: Context) {
         return snapshot(SyncStatus.CHANGES_QUEUED)
     }
 
-    suspend fun checkForUpdate(currentVersion: String): UpdateCheck = withContext(Dispatchers.IO) {
-        val result = request(requireServer() + "/.well-known/healthpulse-android-update", "GET", null, null)
+    override suspend fun checkForUpdate(currentVersion: String): UpdateCheck = withContext(Dispatchers.IO) {
+        val result = httpClient.request(
+            requireServer() + "/.well-known/healthpulse-android-update",
+            "GET",
+            null,
+            null
+        )
         if (result.status !in 200..299) return@withContext UpdateCheck.Unavailable
         val payload = JSONObject(result.body)
         val version = payload.optString("latestVersion")
@@ -277,15 +284,19 @@ class HealthPulseRepository(context: Context) {
         return JSONArray(response.body)
     }
 
-    private suspend fun authorizedRequest(path: String, method: String, body: JSONObject?): HttpResult {
+    private suspend fun authorizedRequest(
+        path: String,
+        method: String,
+        body: JSONObject?
+    ): HealthPulseHttpResponse {
         var token = credentials.getString(ACCESS_TOKEN, null)
         if (token.isNullOrBlank() || credentials.getLong(ACCESS_EXPIRES, 0) <= System.currentTimeMillis()) {
             token = refreshAccessToken()
         }
-        var result = request(requireServer() + path, method, body, token)
-        if (result.status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+        var result = httpClient.request(requireServer() + path, method, body, token)
+        if (result.status == java.net.HttpURLConnection.HTTP_UNAUTHORIZED) {
             token = refreshAccessToken()
-            result = request(requireServer() + path, method, body, token)
+            result = httpClient.request(requireServer() + path, method, body, token)
         }
         return result
     }
@@ -302,7 +313,7 @@ class HealthPulseRepository(context: Context) {
     }
 
     private fun postJson(path: String, payload: JSONObject): JSONObject {
-        val response = request(requireServer() + path, "POST", payload, null)
+        val response = httpClient.request(requireServer() + path, "POST", payload, null)
         check(response.status in 200..299) {
             JSONObject(response.body).optString("detail", "The server rejected the request.")
         }
@@ -314,28 +325,6 @@ class HealthPulseRepository(context: Context) {
         credentials.putString(ACCESS_TOKEN, payload.getString("accessToken"))
         credentials.putString(REFRESH_TOKEN, payload.getString("refreshToken"))
         credentials.putLong(ACCESS_EXPIRES, expiresAt)
-    }
-
-    private fun request(url: String, method: String, payload: JSONObject?, accessToken: String?): HttpResult {
-        val connection = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
-            requestMethod = method
-            connectTimeout = 15_000
-            readTimeout = 20_000
-            setRequestProperty("Accept", "application/json")
-            if (accessToken != null) setRequestProperty("Authorization", "Bearer " + accessToken)
-            if (payload != null) {
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json")
-                outputStream.use { it.write(payload.toString().toByteArray(StandardCharsets.UTF_8)) }
-            }
-        }
-        return try {
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            HttpResult(status, stream?.bufferedReader()?.use { it.readText() }.orEmpty())
-        } finally {
-            connection.disconnect()
-        }
     }
 
     private fun snapshot(status: SyncStatus): AppSnapshot = load().copy(syncStatus = status)
@@ -383,8 +372,6 @@ class HealthPulseRepository(context: Context) {
             candidateParts.getOrElse(index) { 0 } != currentParts.getOrElse(index) { 0 }
         }?.let { candidateParts.getOrElse(it) { 0 } > currentParts.getOrElse(it) { 0 } } ?: false
     }
-
-    private data class HttpResult(val status: Int, val body: String)
 
     private data class QueueOperation(
         val kind: String,

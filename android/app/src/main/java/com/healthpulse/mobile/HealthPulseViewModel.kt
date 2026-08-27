@@ -9,8 +9,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
 
-class HealthPulseViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = HealthPulseRepository(application)
+class HealthPulseViewModel(
+    application: Application,
+    private val repository: HealthPulseRepositoryPort = HealthPulseRepository(application),
+    private val reminderScheduler: ReminderSchedulerPort = AndroidReminderScheduler
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(
+        application,
+        HealthPulseRepository(application),
+        AndroidReminderScheduler
+    )
+
     private val _snapshot = MutableStateFlow(repository.load())
     val snapshot: StateFlow<AppSnapshot> = _snapshot.asStateFlow()
 
@@ -83,7 +92,7 @@ class HealthPulseViewModel(application: Application) : AndroidViewModel(applicat
         _snapshot.value = repository.saveReminder(reminder)
         val templateName = _snapshot.value.templates.firstOrNull { it.id == reminder.templateId }?.name
             ?: "your measurement"
-        ReminderScheduler.schedule(getApplication(), reminder, templateName)
+        reminderScheduler.schedule(getApplication(), reminder, templateName)
     }
 
     fun checkForUpdate(currentVersion: String, callback: (UpdateCheck) -> Unit) {

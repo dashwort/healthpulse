@@ -250,9 +250,9 @@ namespace HealthTracker.Application.Services
         {
             var user = await GetCurrentUserAsync(ct);
             var template = await RequireCustomTemplateAsync(user.Id, templateId, ct);
+            var tracking = await dataStore.GetTrackingAsync(user.Id, templateId, false, ct);
             template.DeletedUtc = DateTimeOffset.UtcNow;
             await dataStore.UpdateTemplateAsync(template, ct);
-            var tracking = await dataStore.GetTrackingAsync(user.Id, templateId, false, ct);
             if (tracking is not null)
             {
                 tracking.DeletedUtc = template.DeletedUtc;

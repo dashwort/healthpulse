@@ -77,6 +77,8 @@ The web app's **App information** page shows the deployed application version, G
 
 Application diagnostics are written to rolling UTF-8 text files under `/app/App_Data/Logs` and are retained for 14 days by default, with a 10 MB limit per active daily file. The `Logging:File:RetentionDays` and `Logging:File:MaximumFileSizeBytes` settings can override those limits. Administrators can open **Application logs** in the web app, use the direct text view, or download the retained output as `healthpulse-logs.txt`. The direct links are ordinary authenticated HTTP requests, so they remain useful when an interactive Blazor circuit is disconnected. Request logging excludes query strings, headers, cookies, and request bodies; do not treat administrator-only log output as public data.
 
+The same administrator page includes a separate, durable **Access activity** trail. It retains successful and failed web sign-ins and approved Android authorizations for seven days, with the attributed approved user when known, source IP address, and user agent. It never stores request contents, credentials, health data, or provider error text. Behind Cloudflare Tunnel, set `AccessActivity__TrustedProxyNetworks__0` (and additional indexed values if needed) to the private Docker network CIDR used exclusively by `cloudflared`, for example `172.20.0.0/16`. The application only accepts `CF-Connecting-IP` from those trusted networks; do not enable unrestricted forwarded headers and do not expose the app container port publicly.
+
 ### Android releases
 
 Tag a release commit as `android-v<major>.<minor>.<patch>` (for example, `android-v1.0.0`). The **Android release** GitHub Actions workflow validates the Android project, builds a signed release APK, verifies its signature, and uploads it as a GitHub Release asset named `HealthPulse-<version>.apk`. It also preserves the APK as a workflow artifact.
@@ -135,13 +137,16 @@ Deletes are soft deletes. A background worker permanently removes soft-deleted r
 
 ```powershell
 dotnet restore HealthTracker.slnx
-dotnet test HealthTracker.slnx --no-restore
 dotnet build HealthTracker.slnx --no-restore
+pwsh tests/HealthTracker.Web.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+dotnet test HealthTracker.slnx --no-restore
 
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 Push-Location android
-./gradlew.bat test
+./gradlew.bat testDebugUnitTest
 ./gradlew.bat assembleDebug
+# With an Android emulator/device connected:
+./gradlew.bat connectedDebugAndroidTest
 Pop-Location
 
 docker build --tag healthpulse:local .

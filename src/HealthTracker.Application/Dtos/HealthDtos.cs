@@ -1,3 +1,5 @@
+using HealthTracker.Domain.Models;
+
 namespace HealthTracker.Application.Dtos
 {
     public sealed record TemplateDto(
@@ -73,4 +75,32 @@ namespace HealthTracker.Application.Dtos
     public sealed record PersonalAccessTokenDto(Guid Id, string Name, string Prefix, DateTimeOffset ExpiresUtc, DateTimeOffset? LastUsedUtc, bool IsRevoked);
 
     public sealed record CreatedPersonalAccessTokenDto(PersonalAccessTokenDto Token, string Secret);
+
+    public sealed record RecordAccessActivityDto(
+        Guid? AllowedUserId,
+        AccessActivityType Type,
+        AccessActivityOutcome Outcome,
+        AccessActivityFailureReason? FailureReason,
+        string? SourceIpAddress,
+        string? UserAgent
+    );
+
+    public sealed record AccessActivityDto(
+        Guid Id,
+        Guid? AllowedUserId,
+        string? UserEmail,
+        string Type,
+        string Outcome,
+        string? FailureReason,
+        DateTimeOffset OccurredUtc,
+        string? SourceIpAddress,
+        string? UserAgent
+    );
+
+    public sealed record AccessActivityPageDto(
+        IReadOnlyCollection<AccessActivityDto> Items,
+        int TotalCount,
+        int Page,
+        int PageSize
+    );
 }
