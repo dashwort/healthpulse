@@ -9,4 +9,6 @@
 **/*.db-wal
 src/HealthTracker.Web/settings.Development.json
 src/HealthTracker.Web/App_Data
+src/HealthTracker.Web/ClientApp/node_modules
+src/HealthTracker.Web/wwwroot/app
 README.md

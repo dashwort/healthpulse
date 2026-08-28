@@ -1,14 +1,12 @@
-using ApexCharts;
-
 using HealthTracker.Application.Abstractions;
 using HealthTracker.Application.Services;
 using HealthTracker.Infrastructure;
 using HealthTracker.Infrastructure.Persistence;
 using HealthTracker.Web.Authentication;
-using HealthTracker.Web.Components;
 using HealthTracker.Web.Configuration;
 using HealthTracker.Web.Logging;
 using HealthTracker.Web.Middleware;
+using HealthTracker.Web.Security;
 using HealthTracker.Web.Services;
 
 using Microsoft.AspNetCore.Antiforgery;
@@ -18,8 +16,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
-
-using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -60,8 +56,9 @@ var accessActivityOptions =
     builder.Configuration.GetSection(AccessActivityOptions.SectionName).Get<AccessActivityOptions>()
     ?? new AccessActivityOptions();
 const string AccessActivityRecordedItemKey = "HealthPulse.AccessActivityRecorded";
-builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-builder.Services.AddControllers();
+builder.Services.AddScoped<CookieAntiforgeryFilter>();
+builder.Services.AddControllers(options => options.Filters.AddService<CookieAntiforgeryFilter>());
+builder.Services.AddAntiforgery();
 builder.Services.Configure<DeploymentInfo>(
     builder.Configuration.GetSection(DeploymentInfo.SectionName)
 );
@@ -82,9 +79,7 @@ builder.Services.AddScoped<HealthTrackerService>();
 builder.Services.AddScoped<AccessActivityService>();
 builder.Services.AddScoped<PersonalAccessTokenService>();
 builder.Services.AddScoped<MobileAuthenticationService>();
-builder.Services.AddMudServices();
 builder.Services.AddHostedService<SoftDeletionPurgeService>();
-builder.Services.AddApexCharts();
 builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("HealthTracker")
         ?? throw new InvalidOperationException("ConnectionStrings:HealthTracker is required.")
@@ -132,7 +127,35 @@ else
             options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
         })
-        .AddCookie()
+        .AddCookie(options =>
+        {
+            options.Events.OnRedirectToLogin = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/api"))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                }
+                else
+                {
+                    context.Response.Redirect(context.RedirectUri);
+                }
+
+                return Task.CompletedTask;
+            };
+            options.Events.OnRedirectToAccessDenied = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/api"))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                }
+                else
+                {
+                    context.Response.Redirect(context.RedirectUri);
+                }
+
+                return Task.CompletedTask;
+            };
+        })
         .AddOpenIdConnect(options =>
         {
             options.Authority = oidc.Authority;
@@ -386,7 +409,8 @@ app.MapGet(
     .RequireAuthorization("Administrator");
 app.MapControllers();
 app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = "PersonalAccessToken" });
-app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+app.Map("/api/{**path}", () => Results.NotFound());
+app.MapFallbackToFile("app/index.html");
 app.Run();
 
 public partial class Program { }

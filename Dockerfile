@@ -1,4 +1,12 @@
 # Build stage
+FROM node:24-alpine AS frontend
+WORKDIR /src/src/HealthTracker.Web/ClientApp
+RUN npm install --global pnpm@11.24.0
+COPY ["src/HealthTracker.Web/ClientApp/package.json", "src/HealthTracker.Web/ClientApp/pnpm-lock.yaml", "./"]
+RUN pnpm install --frozen-lockfile
+COPY ["src/HealthTracker.Web/ClientApp", "./"]
+RUN pnpm test && pnpm build
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
@@ -11,6 +19,7 @@ COPY ["src/HealthTracker.Web/HealthTracker.Web.csproj", "src/HealthTracker.Web/"
 RUN dotnet restore "src/HealthTracker.Web/HealthTracker.Web.csproj"
 
 COPY src ./src
+COPY --from=frontend /src/src/HealthTracker.Web/wwwroot/app ./src/HealthTracker.Web/wwwroot/app
 RUN dotnet publish "src/HealthTracker.Web/HealthTracker.Web.csproj" --configuration Release --output /app/publish --property UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final

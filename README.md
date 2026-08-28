@@ -2,7 +2,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
-HealthPulse is an open-source .NET 10 Blazor Web App and controller-based REST API for recording and visualising personal health readings. It uses hexagonal architecture, EF Core with SQLite as the first adapter, generic OpenID Connect authentication, and MudBlazor for the UI.
+HealthPulse is an open-source .NET 10 application for recording and visualising personal health readings. Its React/TypeScript frontend and controller-based REST API are hosted by ASP.NET Core. It uses hexagonal architecture, EF Core with SQLite as the first adapter, and generic OpenID Connect authentication.
 
 Repository: <https://github.com/dashwort/healthpulse>
 
@@ -13,7 +13,8 @@ This project is provided for personal tracking and software development purposes
 - `src/HealthTracker.Domain` — dependency-free POCO entities and the built-in measurement catalogue.
 - `src/HealthTracker.Application` — use cases, DTOs, mappings, normalization, and persistence/user ports.
 - `src/HealthTracker.Infrastructure` — EF Core SQLite adapter, database models/mappings, and migrations.
-- `src/HealthTracker.Web` — Blazor UI, secured API controllers, OIDC adapter, settings, and deletion worker.
+- `src/HealthTracker.Web` — React UI host, secured API controllers, OIDC adapter, settings, and deletion worker.
+- `src/HealthTracker.Web/ClientApp` — React/TypeScript source for the trend-first frontend.
 - `android` — Android companion app with offline cache/queue, PKCE sign-in, sync status, trends, reminders, and update checks.
 - `.github/workflows` — server/container CI and signed Android release automation.
 
@@ -24,18 +25,27 @@ Every data-store operation is user-scoped using the trusted OIDC subject. Contro
 ### Prerequisites
 
 - .NET SDK 10.0 or later
+- Node.js 24 and pnpm 11.24 for React frontend development
 - An OpenID Connect provider for non-development deployments
 
-Clone the public repository and run the web project. On the first start, set an administrator email for the empty local database:
+Clone the public repository, build the React assets, and run the web project. On the first start, set an administrator email for the empty local database:
 
 ```powershell
 git clone https://github.com/dashwort/healthpulse.git
 cd healthpulse
+Push-Location src/HealthTracker.Web/ClientApp
+pnpm install --frozen-lockfile
+pnpm build
+Pop-Location
 $env:AccessControl__InitialAdministratorEmail = "you@example.com"
 dotnet run --project src/HealthTracker.Web
 ```
 
 The application applies pending EF Core migrations automatically at startup and seeds the built-in measurement catalogue.
+
+The Air interface is served from `/`. It keeps one tracked measurement central, exposes quick reading entry from the persistent `+` action, and includes history, templates, access tokens, app information, user administration, and diagnostics.
+
+For frontend hot reload, run the .NET `http` launch profile on port `5252`, then run `pnpm dev` from `src/HealthTracker.Web/ClientApp` and open `http://localhost:5173/`. The development server proxies `/api` and `/login` to ASP.NET Core.
 
 ### Configure authentication
 
@@ -75,7 +85,7 @@ The image supplies `ConnectionStrings__HealthTracker=Data Source=/app/App_Data/h
 
 The web app's **App information** page shows the deployed application version, GitHub Actions build number, commit SHA, and UTC build time. It also provides a download link for the latest published Android APK. CI injects the deployment metadata into each production image; locally built containers show `development` / `local` values.
 
-Application diagnostics are written to rolling UTF-8 text files under `/app/App_Data/Logs` and are retained for 14 days by default, with a 10 MB limit per active daily file. The `Logging:File:RetentionDays` and `Logging:File:MaximumFileSizeBytes` settings can override those limits. Administrators can open **Application logs** in the web app, use the direct text view, or download the retained output as `healthpulse-logs.txt`. The direct links are ordinary authenticated HTTP requests, so they remain useful when an interactive Blazor circuit is disconnected. Request logging excludes query strings, headers, cookies, and request bodies; do not treat administrator-only log output as public data.
+Application diagnostics are written to rolling UTF-8 text files under `/app/App_Data/Logs` and are retained for 14 days by default, with a 10 MB limit per active daily file. The `Logging:File:RetentionDays` and `Logging:File:MaximumFileSizeBytes` settings can override those limits. Administrators can open **Application logs** in the web app, use the direct text view, or download the retained output as `healthpulse-logs.txt`. The direct links are ordinary authenticated HTTP requests and remain available even if the React interface cannot start. Request logging excludes query strings, headers, cookies, and request bodies; do not treat administrator-only log output as public data.
 
 The same administrator page includes a separate, durable **Access activity** trail. It retains successful and failed web sign-ins and approved Android authorizations for seven days, with the attributed approved user when known, source IP address, and user agent. It never stores request contents, credentials, health data, or provider error text. Behind Cloudflare Tunnel, set `AccessActivity__TrustedProxyNetworks__0` (and additional indexed values if needed) to the private Docker network CIDR used exclusively by `cloudflared`, for example `172.20.0.0/16`. The application only accepts `CF-Connecting-IP` from those trusted networks; do not enable unrestricted forwarded headers and do not expose the app container port publicly.
 
@@ -136,6 +146,12 @@ Deletes are soft deletes. A background worker permanently removes soft-deleted r
 ## Verify locally
 
 ```powershell
+Push-Location src/HealthTracker.Web/ClientApp
+pnpm install --frozen-lockfile
+pnpm test
+pnpm build
+Pop-Location
+
 dotnet restore HealthTracker.slnx
 dotnet build HealthTracker.slnx --no-restore
 pwsh tests/HealthTracker.Web.Tests/bin/Release/net10.0/playwright.ps1 install chromium

@@ -8,6 +8,52 @@ namespace HealthTracker.Web.Models
 
     public sealed record AllowedUserRoleRequest(string Role);
 
+    public sealed record SessionResponse(
+        bool IsAuthenticated,
+        string? DisplayName,
+        string? Email,
+        bool IsAdministrator,
+        string? AntiforgeryToken
+    );
+
+    public sealed record DeploymentResponse(
+        string Version,
+        string Build,
+        string Commit,
+        string BuiltAtUtc
+    );
+
+    public sealed record AndroidReleaseResponse(
+        string LatestVersion,
+        string? ApkUrl,
+        string ReleaseNotes
+    );
+
+    public sealed record AppInfoResponse(
+        DeploymentResponse Deployment,
+        AndroidReleaseResponse Android
+    );
+
+    public sealed class PersonalAccessTokenRequest
+    {
+        [Required, StringLength(100)]
+        public string Name { get; init; } = string.Empty;
+    }
+
+    public sealed record PersonalAccessTokenResponse(
+        Guid Id,
+        string Name,
+        string Prefix,
+        DateTimeOffset ExpiresUtc,
+        DateTimeOffset? LastUsedUtc,
+        bool IsRevoked
+    );
+
+    public sealed record CreatedPersonalAccessTokenResponse(
+        PersonalAccessTokenResponse Token,
+        string Secret
+    );
+
     public sealed record AllowedUserResponse(
         Guid Id,
         string Email,

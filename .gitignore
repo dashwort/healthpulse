@@ -7,6 +7,9 @@ obj/
 *.db-wal
 src/HealthTracker.Web/settings.Development.json
 src/HealthTracker.Web/App_Data/
+src/HealthTracker.Web/ClientApp/node_modules/
+src/HealthTracker.Web/ClientApp/*.tsbuildinfo
+src/HealthTracker.Web/wwwroot/app/
 .env
 android/.gradle/
 android/build/

@@ -473,4 +473,60 @@ public sealed class ApiRegressionTests
                 && item.GetProperty("isArchived").GetBoolean()
         );
     }
+
+    [Fact]
+    public async Task App_session_describes_the_authenticated_administrator()
+    {
+        // Arrange
+        await factory.SeedDevelopmentUserAsync();
+
+        // Act
+        var response = await factory.Client.GetFromJsonAsync<JsonElement>("/api/app/session");
+
+        // Assert
+        response.GetProperty("isAuthenticated").GetBoolean().Should().BeTrue();
+        response.GetProperty("isAdministrator").GetBoolean().Should().BeTrue();
+        response.GetProperty("antiforgeryToken").GetString().Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task App_info_returns_deployment_and_android_release_details()
+    {
+        // Arrange
+        await factory.SeedDevelopmentUserAsync();
+
+        // Act
+        var response = await factory.Client.GetFromJsonAsync<JsonElement>("/api/app/info");
+
+        // Assert
+        response.GetProperty("deployment").GetProperty("version").GetString()
+            .Should().NotBeNullOrWhiteSpace();
+        response.GetProperty("android").GetProperty("latestVersion").GetString()
+            .Should().Be("1.2.3");
+    }
+
+    [Fact]
+    public async Task Token_endpoints_create_list_and_revoke_a_personal_token()
+    {
+        // Arrange
+        await factory.SeedDevelopmentUserAsync();
+
+        // Act
+        var createdResponse = await factory.Client.PostAsJsonAsync(
+            "/api/tokens",
+            new { name = "Automation" }
+        );
+
+        // Assert
+        createdResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createdResponse.Content.ReadFromJsonAsync<JsonElement>();
+        created.GetProperty("secret").GetString().Should().StartWith("hp_");
+        var tokenId = created.GetProperty("token").GetProperty("id").GetGuid();
+
+        var listed = await factory.Client.GetFromJsonAsync<JsonElement[]>("/api/tokens");
+        listed.Should().ContainSingle(item => item.GetProperty("id").GetGuid() == tokenId);
+
+        var revoked = await factory.Client.DeleteAsync($"/api/tokens/{tokenId}");
+        revoked.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
 }

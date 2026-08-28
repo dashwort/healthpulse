@@ -4,7 +4,7 @@ This file is the working guide for contributors and coding agents modifying the 
 
 ## Project overview
 
-HealthPulse is a .NET 10 Blazor Web App with a controller-based REST API and Android companion app for recording personal health readings. It supports built-in and user-created measurement templates, normalized units for built-in measurements, local date/time entry with UTC persistence, backdated readings, offline Android queueing and synchronisation, soft deletion, and trend charts.
+HealthPulse is a .NET 10 application with a controller-based REST API, a React/TypeScript frontend, and an Android companion app for recording personal health readings. It supports built-in and user-created measurement templates, normalized units for built-in measurements, local date/time entry with UTC persistence, backdated readings, offline Android queueing and synchronisation, soft deletion, and trend charts.
 
 The application is strictly user-scoped, with a small administrator role for allow-list, token, and diagnostics management. A request must never accept a user ID from the UI or trust a user ID supplied by a client; the authenticated subject is resolved by the web adapter and passed through the application current-user port.
 
@@ -15,7 +15,8 @@ src/
   HealthTracker.Domain/          Dependency-free domain POCOs and built-in catalogue
   HealthTracker.Application/    Use cases, ports, DTOs, mappings, and unit conversion
   HealthTracker.Infrastructure/ EF Core adapter, SQLite mappings, migrations, and seeding
-  HealthTracker.Web/             Blazor UI, API controllers, OIDC, hosting, and purge worker
+  HealthTracker.Web/             React host, API controllers, OIDC, hosting, and purge worker
+    ClientApp/                   React/TypeScript frontend
 android/                          Android companion app, offline cache/queue, mobile authentication, and APK build
 tests/
   HealthTracker.Application.Tests/ Application service and unit-conversion tests
@@ -26,7 +27,7 @@ The internal project and namespace names retain `HealthTracker`; `HealthPulse` i
 ## Architecture and dependency rules
 
 - Domain contains simple POCO models and must not depend on EF Core, ASP.NET Core, MudBlazor, or browser APIs.
-- Application owns use cases and ports. `HealthTrackerService` is the application façade used by both controllers and the Blazor UI.
+- Application owns use cases and ports. `HealthTrackerService` is the application façade used by the web/API adapters.
 - Application accesses persistence through `IHealthDataStore` and identity through `ICurrentUser`.
 - DTOs are application/API contracts. Keep conversion between domain and DTO layers in extension methods under `Mappings`; do not leak persistence models into controllers or components.
 - Infrastructure implements application ports with EF Core. SQLite is the current adapter, but provider-specific code belongs in Infrastructure's composition root and persistence mappings.
@@ -46,9 +47,10 @@ The internal project and namespace names retain `HealthTracker`; `HealthPulse` i
 
 ## Web UI conventions
 
-- The UI uses Blazor Interactive Server rendering, MudBlazor components, and Blazor-ApexCharts.
-- Main pages are Dashboard (`Home.razor`), Readings, and Templates. Keep navigation reachable and responsive at narrow widths.
-- The web theme follows the system preference by default, can be toggled, and is persisted in browser local storage. The Android app uses its dark theme. MudBlazor and chart palettes should remain visually consistent when changing the web theme.
+- The web frontend uses React/TypeScript under `src/HealthTracker.Web/ClientApp`; Rsbuild outputs it to the ignored `wwwroot/app` directory and ASP.NET Core serves it from `/`.
+- The selected React visual direction is Air: one dominant trend, plain measurement and range switches, generous whitespace, thin dividers, and persistent quick entry. Avoid dashboard card grids, slogan copy, and decorative statistics.
+- Main pages are Trend, History, and Templates. Account and administrator destinations stay in the compact utility menu. Keep navigation reachable and responsive at narrow widths.
+- The web theme follows the system preference by default, can be toggled, and is persisted in browser local storage. The Android app uses its dark theme. Keep the custom chart and interface tokens visually consistent when changing the web theme.
 - Reading entry/edit dialogs must validate numeric values, units, timestamps, and note length before saving. Web and Android entry surfaces collect local date/time; the server and API contract persist `DateTimeOffset` values in UTC. Historical dates are allowed, but timestamps more than five minutes in the future are rejected.
 - Charts show one metric at a time in its stored normalized unit and need an explicit empty-data state.
 - Destructive actions require confirmation and should report success/failure through the existing snackbar/dialog patterns rather than uncaught exceptions.
@@ -90,6 +92,12 @@ The internal project and namespace names retain `HealthTracker`; `HealthPulse` i
 Run from the repository root:
 
 ```powershell
+Push-Location src/HealthTracker.Web/ClientApp
+pnpm install --frozen-lockfile
+pnpm test
+pnpm build
+Pop-Location
+
 dotnet restore HealthTracker.slnx
 dotnet test HealthTracker.slnx --no-restore
 dotnet build HealthTracker.slnx --no-restore
