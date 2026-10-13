@@ -36,6 +36,16 @@ namespace HealthTracker.Application.Abstractions
         Task UpdateMcpAuditLogAsync(McpAuditLog auditLog, CancellationToken cancellationToken);
         Task<int> CountMcpCallsSinceAsync(Guid tokenId, DateTimeOffset sinceUtc, CancellationToken cancellationToken);
         Task<int> PurgeMcpAuditLogsAsync(DateTimeOffset beforeUtc, CancellationToken cancellationToken);
+        Task<IReadOnlyCollection<TrafficMetricBucket>> GetTrafficMetricBucketsAsync(
+            long fromUtcTicks,
+            long toUtcTicks,
+            CancellationToken cancellationToken
+        );
+        Task UpsertTrafficMetricBucketsAsync(
+            IReadOnlyCollection<TrafficMetricBucket> buckets,
+            CancellationToken cancellationToken
+        );
+        Task<int> PurgeTrafficMetricBucketsAsync(long beforeUtcTicks, CancellationToken cancellationToken);
         Task AddAccessActivityAsync(AccessActivity activity, CancellationToken cancellationToken);
         Task<(IReadOnlyCollection<AccessActivity> Items, int TotalCount)> GetAccessActivitiesPageAsync(
             Guid? allowedUserId,

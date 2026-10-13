@@ -12,6 +12,7 @@ namespace HealthTracker.Infrastructure.Persistence
         public DbSet<PersonalAccessTokenRecord> PersonalAccessTokens => Set<PersonalAccessTokenRecord>();
         public DbSet<McpAuditLogRecord> McpAuditLogs => Set<McpAuditLogRecord>();
         public DbSet<AccessActivityRecord> AccessActivities => Set<AccessActivityRecord>();
+        public DbSet<TrafficMetricBucketRecord> TrafficMetricBuckets => Set<TrafficMetricBucketRecord>();
         public DbSet<MobileAuthorizationRequestRecord> MobileAuthorizationRequests =>
             Set<MobileAuthorizationRequestRecord>();
         public DbSet<MobileSessionRecord> MobileSessions => Set<MobileSessionRecord>();
@@ -99,6 +100,21 @@ namespace HealthTracker.Infrastructure.Persistence
                 entity.HasIndex(x => x.OccurredUtc);
                 entity.HasIndex(x => new { x.AllowedUserId, x.OccurredUtc });
                 ConfigureUtc(entity.Property(x => x.OccurredUtc));
+            });
+            modelBuilder.Entity<TrafficMetricBucketRecord>(entity =>
+            {
+                entity.ToTable("TrafficMetricBuckets");
+                entity.HasKey(x => new
+                {
+                    x.BucketStartUtcTicks,
+                    x.RouteTemplate,
+                    x.Method,
+                    x.StatusCode,
+                    x.LatencyBand,
+                });
+                entity.Property(x => x.RouteTemplate).HasMaxLength(180).IsRequired();
+                entity.Property(x => x.Method).HasMaxLength(12).IsRequired();
+                entity.HasIndex(x => x.BucketStartUtcTicks);
             });
             modelBuilder.Entity<MobileAuthorizationRequestRecord>(entity =>
             {

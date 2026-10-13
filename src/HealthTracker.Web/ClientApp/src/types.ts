@@ -134,3 +134,44 @@ export interface LogSnapshot {
   fileCount: number
   generatedAtUtc: string
 }
+
+export type TrafficRange = '24h' | '7d' | '30d'
+
+export interface TrafficTimelineBucket {
+  startUtc: string
+  successfulResponses: number
+  clientErrorResponses: number
+  rateLimitedResponses: number
+  serverErrorResponses: number
+}
+
+export interface TrafficRouteSummary {
+  routeTemplate: string
+  method: string
+  requestCount: number
+  errorCount: number
+  p95LatencyBand: number
+}
+
+export interface TrafficStatusSummary {
+  statusCode: number
+  requestCount: number
+}
+
+export interface TrafficSummary {
+  range: TrafficRange
+  fromUtc: string
+  toUtc: string
+  totalRequests: number
+  previousPeriodRequests: number
+  requestChangePercent: number | null
+  successfulResponses: number
+  clientErrorResponses: number
+  rateLimitedResponses: number
+  serverErrorResponses: number
+  p50LatencyBand: number
+  p95LatencyBand: number
+  timeline: TrafficTimelineBucket[]
+  topRoutes: TrafficRouteSummary[]
+  topStatuses: TrafficStatusSummary[]
+}

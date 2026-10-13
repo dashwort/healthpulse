@@ -24,6 +24,7 @@ namespace HealthTracker.Web.Services
             var deleted = await store.PurgeSoftDeletedAsync(DateTimeOffset.UtcNow.AddDays(-60), ct);
             await store.PurgeMcpAuditLogsAsync(DateTimeOffset.UtcNow.AddYears(-1), ct);
             await store.PurgeAccessActivitiesAsync(DateTimeOffset.UtcNow.AddDays(-7), ct);
+            await store.PurgeTrafficMetricBucketsAsync(DateTimeOffset.UtcNow.AddDays(-60).UtcTicks, ct);
             if (deleted > 0)
             {
                 logger.LogInformation(

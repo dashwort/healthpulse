@@ -1,7 +1,7 @@
 import type {
   AccessActivityPage, AccessActivityRange, AccessActivitySummary, AllowedUser, AppInfo, CreatedPersonalAccessToken,
   CustomTemplateInput, LogSnapshot, PersonalAccessToken, Reading, ReadingInput,
-  ReadingPage, Session, Template,
+  ReadingPage, Session, Template, TrafficRange, TrafficSummary,
 } from './types'
 
 interface ProblemDetails {
@@ -110,6 +110,11 @@ export const getLogSnapshot = (signal?: AbortSignal) => request<LogSnapshot>('/a
 export function getAccessActivitySummary(range: AccessActivityRange = '24h', signal?: AbortSignal) {
   const query = new URLSearchParams({ range })
   return request<AccessActivitySummary>('/api/admin/diagnostics/activity/summary?' + query, { signal })
+}
+
+export function getTrafficSummary(range: TrafficRange = '24h', signal?: AbortSignal) {
+  const query = new URLSearchParams({ range })
+  return request<TrafficSummary>('/api/admin/diagnostics/traffic/summary?' + query, { signal })
 }
 
 export function getAccessActivity(filters: {

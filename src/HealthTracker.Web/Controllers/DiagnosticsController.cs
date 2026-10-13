@@ -11,7 +11,8 @@ namespace HealthTracker.Web.Controllers
     [ApiController, Authorize(Policy = "Administrator"), Route("api/admin/diagnostics")]
     public sealed class DiagnosticsController(
         ApplicationLogService logs,
-        AccessActivityService accessActivity
+        AccessActivityService accessActivity,
+        TrafficAnalyticsService trafficAnalytics
     ) : ControllerBase
     {
         [HttpGet("logs")]
@@ -58,6 +59,22 @@ namespace HealthTracker.Web.Controllers
             try
             {
                 return Ok(await accessActivity.GetSummaryAsync(range, ct));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new ProblemDetails { Detail = ex.Message });
+            }
+        }
+
+        [HttpGet("traffic/summary")]
+        public async Task<ActionResult<TrafficSummaryDto>> GetTrafficSummary(
+            [FromQuery] string range = "24h",
+            CancellationToken ct = default
+        )
+        {
+            try
+            {
+                return Ok(await trafficAnalytics.GetSummaryAsync(range, ct));
             }
             catch (ArgumentException ex)
             {

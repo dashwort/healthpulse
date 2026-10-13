@@ -4,10 +4,12 @@ import { AppShell } from './components/AppShell'
 import { QuickAdd } from './components/QuickAdd'
 import { HistoryPage } from './pages/HistoryPage'
 import { LogsPage } from './pages/LogsPage'
+import { SecurityPage } from './pages/SecurityPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 import { TokensPage } from './pages/TokensPage'
 import { TrendPage } from './pages/TrendPage'
+import { TrafficPage } from './pages/TrafficPage'
 import { UsersPage } from './pages/UsersPage'
 import type { Reading, Session, Template } from './types'
 
@@ -56,7 +58,8 @@ function App() {
   useEffect(() => {
     const titles: Record<string, string> = {
       '/': 'Trends', '/readings': 'History', '/templates': 'Templates', '/tokens': 'Access tokens',
-      '/settings': 'App information', '/users': 'Users', '/logs': 'Application logs',
+      '/settings': 'App information', '/users': 'Users', '/traffic': 'Traffic',
+      '/security': 'Security', '/logs': 'Logs',
     }
     document.title = `${titles[path] ?? 'HealthPulse'} · HealthPulse`
   }, [path])
@@ -109,7 +112,9 @@ function App() {
   else if (path === '/tokens') page = <TokensPage announce={announce} />
   else if (path === '/settings') page = <SettingsPage announce={announce} />
   else if (path === '/users' && session.isAdministrator) page = <UsersPage announce={announce} />
-  else if (path === '/logs' && session.isAdministrator) page = <LogsPage announce={announce} />
+  else if (path === '/traffic' && session.isAdministrator) page = <TrafficPage announce={announce} onNavigate={navigate} />
+  else if (path === '/security' && session.isAdministrator) page = <SecurityPage announce={announce} onNavigate={navigate} />
+  else if (path === '/logs' && session.isAdministrator) page = <LogsPage announce={announce} onNavigate={navigate} />
   else page = <main className="page"><section className="empty-state"><h1>Page not found</h1><button type="button" className="text-action" onClick={() => navigate('/')}>Return to trends</button></section></main>
 
   return <AppShell path={path} session={session} trackedTemplates={trackedTemplates} theme={theme} onNavigate={navigate} onToggleTheme={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')} onAddReading={() => setQuickAddOpen(true)}>

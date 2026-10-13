@@ -283,6 +283,65 @@ namespace HealthTracker.Infrastructure.Persistence
             return logs.Count;
         }
 
+        public async Task<IReadOnlyCollection<TrafficMetricBucket>> GetTrafficMetricBucketsAsync(
+            long fromUtcTicks,
+            long toUtcTicks,
+            CancellationToken ct
+        )
+        {
+            var records = await db.TrafficMetricBuckets
+                .AsNoTracking()
+                .Where(x => x.BucketStartUtcTicks >= fromUtcTicks && x.BucketStartUtcTicks < toUtcTicks)
+                .ToArrayAsync(ct);
+            return [.. records.Select(record => new TrafficMetricBucket(
+                record.BucketStartUtcTicks,
+                record.RouteTemplate,
+                record.Method,
+                record.StatusCode,
+                record.LatencyBand,
+                record.RequestCount,
+                record.TotalElapsedMilliseconds,
+                record.MaxElapsedMilliseconds
+            ))];
+        }
+
+        public async Task UpsertTrafficMetricBucketsAsync(
+            IReadOnlyCollection<TrafficMetricBucket> buckets,
+            CancellationToken ct
+        )
+        {
+            if (buckets.Count == 0)
+            {
+                return;
+            }
+
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            foreach (var bucket in buckets)
+            {
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "TrafficMetricBuckets" (
+                        "BucketStartUtcTicks", "RouteTemplate", "Method", "StatusCode", "LatencyBand",
+                        "RequestCount", "TotalElapsedMilliseconds", "MaxElapsedMilliseconds"
+                    ) VALUES (
+                        {bucket.BucketStartUtcTicks}, {bucket.RouteTemplate}, {bucket.Method}, {bucket.StatusCode}, {bucket.LatencyBand},
+                        {bucket.RequestCount}, {bucket.TotalElapsedMilliseconds}, {bucket.MaxElapsedMilliseconds}
+                    )
+                    ON CONFLICT ("BucketStartUtcTicks", "RouteTemplate", "Method", "StatusCode", "LatencyBand")
+                    DO UPDATE SET
+                        "RequestCount" = "TrafficMetricBuckets"."RequestCount" + excluded."RequestCount",
+                        "TotalElapsedMilliseconds" = "TrafficMetricBuckets"."TotalElapsedMilliseconds" + excluded."TotalElapsedMilliseconds",
+                        "MaxElapsedMilliseconds" = MAX("TrafficMetricBuckets"."MaxElapsedMilliseconds", excluded."MaxElapsedMilliseconds");
+                    """, ct);
+            }
+
+            await transaction.CommitAsync(ct);
+        }
+
+        public Task<int> PurgeTrafficMetricBucketsAsync(long beforeUtcTicks, CancellationToken ct) =>
+            db.TrafficMetricBuckets
+                .Where(bucket => bucket.BucketStartUtcTicks < beforeUtcTicks)
+                .ExecuteDeleteAsync(ct);
+
         public Task AddAccessActivityAsync(AccessActivity activity, CancellationToken ct)
         {
             return db.AccessActivities.AddAsync(activity.ToRecord(), ct).AsTask();

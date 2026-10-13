@@ -406,6 +406,43 @@ namespace HealthTracker.Infrastructure.Persistence.Migrations
                     b.ToTable("TrackedTemplates", (string)null);
                 });
 
+            modelBuilder.Entity("HealthTracker.Infrastructure.Persistence.Models.TrafficMetricBucketRecord", b =>
+                {
+                    b.Property<long>("BucketStartUtcTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MaxElapsedMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LatencyBand")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RequestCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RouteTemplate")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("TotalElapsedMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("BucketStartUtcTicks", "RouteTemplate", "Method", "StatusCode", "LatencyBand");
+
+                    b.HasIndex("BucketStartUtcTicks");
+
+                    b.ToTable("TrafficMetricBuckets", (string)null);
+                });
+
             modelBuilder.Entity("HealthTracker.Infrastructure.Persistence.Models.UserRecord", b =>
                 {
                     b.Property<Guid>("Id")

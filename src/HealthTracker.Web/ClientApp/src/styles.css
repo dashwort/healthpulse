@@ -376,6 +376,22 @@ select:focus-visible {
 .user-tokens button { background: transparent; border: 0; color: var(--air-muted); cursor: pointer; margin-left: 6px; padding: 0; }
 
 .heading-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.diagnostics-tabs {
+  border-bottom: 1px solid var(--air-line-strong);
+  display: flex;
+  gap: 28px;
+  margin: -22px 0 35px;
+}
+.diagnostics-tabs a {
+  border-bottom: 2px solid transparent;
+  color: var(--air-muted);
+  font-size: 12px;
+  min-height: 42px;
+  padding: 12px 1px 10px;
+  text-decoration: none;
+}
+.diagnostics-tabs a[aria-current='page'] { border-bottom-color: var(--air-accent); color: var(--air-ink); }
+.raw-log-description { margin: -10px 0 18px; }
 .activity-list .data-row { grid-template-columns: 1.1fr 1.5fr 1fr 1fr .7fr; }
 .section-heading > span { color: var(--air-muted); font-size: 10px; }
 .log-viewer { background: transparent; border: 1px solid var(--air-line); color: var(--air-ink); font: 11px/1.55 Consolas, monospace; margin: 0; max-height: 560px; overflow: auto; padding: 18px; white-space: pre-wrap; }
@@ -419,6 +435,55 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .access-summary-item small { color: var(--air-muted); display: block; font-size: 10px; }
+.traffic-summary {
+  border-bottom: 1px solid var(--air-line);
+  border-top: 1px solid var(--air-line-strong);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 30px;
+  padding: 17px 0 18px;
+}
+.traffic-insights {
+  align-items: start;
+  display: grid;
+  gap: 40px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(270px, 1fr);
+}
+.traffic-empty { border-bottom: 1px solid var(--air-line); margin: 0; padding: 16px 0; }
+.traffic-chart-success,
+.traffic-chart-client-error,
+.traffic-chart-rate-limit,
+.traffic-chart-server-error { fill: none; stroke-width: 2; }
+.traffic-chart-success { stroke: var(--air-ink); }
+.traffic-chart-client-error { stroke: var(--air-accent); stroke-dasharray: 5 4; }
+.traffic-chart-rate-limit { stroke: var(--air-focus); stroke-dasharray: 2 4; }
+.traffic-chart-server-error { stroke: var(--air-error); stroke-dasharray: 8 3 2 3; }
+.traffic-chart-legend { color: var(--air-muted); display: flex; flex-wrap: wrap; font-size: 10px; gap: 13px; margin-top: 1px; }
+.traffic-chart-legend span { align-items: center; display: inline-flex; gap: 6px; }
+.traffic-chart-legend i { display: inline-block; height: 2px; width: 13px; }
+.traffic-success-key { background: var(--air-ink); }
+.traffic-client-key { background: var(--air-accent); }
+.traffic-rate-key { background: var(--air-focus); }
+.traffic-server-key { background: var(--air-error); }
+.traffic-latency { border-top: 1px solid var(--air-line); display: flex; gap: 40px; margin-top: 15px; padding-top: 13px; }
+.traffic-latency > div { display: flex; flex-direction: column; gap: 5px; }
+.traffic-latency span { color: var(--air-muted); font-size: 10px; }
+.traffic-latency strong { font-family: Georgia, 'Times New Roman', serif; font-size: 19px; font-weight: 400; }
+.traffic-side-insights { display: flex; flex-direction: column; gap: 29px; min-width: 0; }
+.traffic-route-list { border-top: 1px solid var(--air-line); }
+.traffic-route { border-bottom: 1px solid var(--air-line); padding: 10px 0; }
+.traffic-route > div { align-items: baseline; display: flex; flex-wrap: wrap; gap: 7px; }
+.traffic-route code { font-family: Consolas, monospace; font-size: 10px; overflow-wrap: anywhere; }
+.traffic-method { color: var(--air-muted); font-size: 9px; letter-spacing: .06em; min-width: 43px; }
+.traffic-route small { color: var(--air-muted); display: block; font-size: 10px; line-height: 1.5; margin-top: 5px; }
+.traffic-status-list { list-style: none; margin: 0; padding: 0; }
+.traffic-status-list li { align-items: center; border-bottom: 1px solid var(--air-line); display: flex; justify-content: space-between; min-height: 38px; padding: 6px 0; }
+.traffic-status-code { font-family: Consolas, monospace; font-size: 11px; }
+.status-2xx { color: var(--air-ink); }
+.status-3xx { color: var(--air-muted); }
+.status-4xx { color: var(--air-accent); }
+.status-5xx { color: var(--air-error); }
+.status-rate-limit { color: var(--air-focus); }
 .access-insights {
   align-items: start;
   display: grid;
@@ -856,6 +921,11 @@ select:focus-visible {
 
 @media (max-width: 800px) {
   .access-insights { grid-template-columns: 1fr; gap: 29px; }
+  .traffic-insights { grid-template-columns: 1fr; gap: 29px; }
+  .traffic-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 16px; }
+  .traffic-summary .access-summary-item:nth-child(3) { border-right: 0; padding-right: 0; }
+  .traffic-summary .access-summary-item:nth-child(4) { padding-left: 0; }
+  .traffic-summary .access-summary-item:nth-child(5) { border-right: 0; padding-right: 0; }
 }
 
 @media (max-width: 660px) {
@@ -918,6 +988,12 @@ select:focus-visible {
   .access-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 16px; }
   .access-summary-item:nth-child(2) { border-right: 0; padding-right: 0; }
   .access-summary-item:nth-child(3) { padding-left: 0; }
+  .traffic-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .traffic-summary .access-summary-item:nth-child(2n) { border-right: 0; padding-right: 0; }
+  .traffic-summary .access-summary-item:nth-child(3) { border-right: 1px solid var(--air-line); padding-left: 0; padding-right: 18px; }
+  .traffic-summary .access-summary-item:nth-child(4) { padding-left: 18px; }
+  .traffic-summary .access-summary-item:nth-child(5) { border-right: 0; padding-left: 0; }
+  .diagnostics-tabs { gap: 24px; margin-top: -22px; overflow-x: auto; }
   .access-chart { margin-top: 15px; }
   .logs-filter-line { gap: 18px; margin-bottom: 25px; }
   .ip-filter-actions { align-self: flex-start; min-height: 32px; }

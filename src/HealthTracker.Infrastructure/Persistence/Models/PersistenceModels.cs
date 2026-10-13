@@ -56,6 +56,18 @@ namespace HealthTracker.Infrastructure.Persistence.Models
         public string? UserAgent { get; set; }
     }
 
+    public sealed class TrafficMetricBucketRecord
+    {
+        public long BucketStartUtcTicks { get; set; }
+        public string RouteTemplate { get; set; } = string.Empty;
+        public string Method { get; set; } = string.Empty;
+        public int StatusCode { get; set; }
+        public int LatencyBand { get; set; }
+        public long RequestCount { get; set; }
+        public long TotalElapsedMilliseconds { get; set; }
+        public long MaxElapsedMilliseconds { get; set; }
+    }
+
     public sealed class MobileAuthorizationRequestRecord
     {
         public Guid Id { get; set; }

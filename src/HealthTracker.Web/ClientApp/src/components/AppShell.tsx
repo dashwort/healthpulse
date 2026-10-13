@@ -53,7 +53,7 @@ export function AppShell({ path, session, trackedTemplates, theme, children, onN
               {link('/tokens', 'Access tokens')}
               {link('/settings', 'App information')}
               {session.isAdministrator && link('/users', 'Users')}
-              {session.isAdministrator && link('/logs', 'Diagnostics')}
+              {session.isAdministrator && link('/traffic', 'Diagnostics')}
             </nav>
             <form method="post" action="/logout">
               {session.antiforgeryToken && <input type="hidden" name="__RequestVerificationToken" value={session.antiforgeryToken} />}

@@ -42,6 +42,8 @@ public sealed class TestDataStore : IHealthDataStore
 
     public List<AccessActivity> AccessActivities { get; } = [];
 
+    public List<TrafficMetricBucket> TrafficMetricBuckets { get; } = [];
+
     public List<MobileAuthorizationRequest> MobileAuthorizationRequests { get; } = [];
 
     public List<MobileSession> MobileSessions { get; } = [];
@@ -184,6 +186,58 @@ public sealed class TestDataStore : IHealthDataStore
         }
 
         return Task.FromResult(oldLogs.Length);
+    }
+
+    public Task<IReadOnlyCollection<TrafficMetricBucket>> GetTrafficMetricBucketsAsync(
+        long fromUtcTicks,
+        long toUtcTicks,
+        CancellationToken ct
+    ) => Task.FromResult<IReadOnlyCollection<TrafficMetricBucket>>(
+        TrafficMetricBuckets
+            .Where(bucket => bucket.BucketStartUtcTicks >= fromUtcTicks && bucket.BucketStartUtcTicks < toUtcTicks)
+            .ToArray()
+    );
+
+    public Task UpsertTrafficMetricBucketsAsync(
+        IReadOnlyCollection<TrafficMetricBucket> buckets,
+        CancellationToken ct
+    )
+    {
+        foreach (var bucket in buckets)
+        {
+            var index = TrafficMetricBuckets.FindIndex(existing =>
+                existing.BucketStartUtcTicks == bucket.BucketStartUtcTicks
+                && existing.RouteTemplate == bucket.RouteTemplate
+                && existing.Method == bucket.Method
+                && existing.StatusCode == bucket.StatusCode
+                && existing.LatencyBand == bucket.LatencyBand);
+            if (index < 0)
+            {
+                TrafficMetricBuckets.Add(bucket);
+                continue;
+            }
+
+            var existing = TrafficMetricBuckets[index];
+            TrafficMetricBuckets[index] = existing with
+            {
+                RequestCount = existing.RequestCount + bucket.RequestCount,
+                TotalElapsedMilliseconds = existing.TotalElapsedMilliseconds + bucket.TotalElapsedMilliseconds,
+                MaxElapsedMilliseconds = Math.Max(existing.MaxElapsedMilliseconds, bucket.MaxElapsedMilliseconds),
+            };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<int> PurgeTrafficMetricBucketsAsync(long beforeUtcTicks, CancellationToken ct)
+    {
+        var oldBuckets = TrafficMetricBuckets.Where(bucket => bucket.BucketStartUtcTicks < beforeUtcTicks).ToArray();
+        foreach (var bucket in oldBuckets)
+        {
+            TrafficMetricBuckets.Remove(bucket);
+        }
+
+        return Task.FromResult(oldBuckets.Length);
     }
 
     public Task AddAccessActivityAsync(AccessActivity activity, CancellationToken ct)
