@@ -1,5 +1,5 @@
 import type {
-  AccessActivityPage, AllowedUser, AppInfo, CreatedPersonalAccessToken,
+  AccessActivityPage, AccessActivityRange, AccessActivitySummary, AllowedUser, AppInfo, CreatedPersonalAccessToken,
   CustomTemplateInput, LogSnapshot, PersonalAccessToken, Reading, ReadingInput,
   ReadingPage, Session, Template,
 } from './types'
@@ -107,10 +107,24 @@ export function updateUserRole(id: string, role: string): Promise<AllowedUser> {
 export const archiveUser = (id: string) => request<void>(`/api/users/${id}`, { method: 'DELETE' })
 
 export const getLogSnapshot = (signal?: AbortSignal) => request<LogSnapshot>('/api/admin/diagnostics/logs', { signal })
-export function getAccessActivity(filters: { userId?: string; type?: string; outcome?: string; page?: number }, signal?: AbortSignal) {
+export function getAccessActivitySummary(range: AccessActivityRange = '24h', signal?: AbortSignal) {
+  const query = new URLSearchParams({ range })
+  return request<AccessActivitySummary>('/api/admin/diagnostics/activity/summary?' + query, { signal })
+}
+
+export function getAccessActivity(filters: {
+  userId?: string
+  type?: string
+  outcome?: string
+  range?: AccessActivityRange
+  sourceIpAddress?: string
+  page?: number
+}, signal?: AbortSignal) {
   const query = new URLSearchParams({ page: String(filters.page ?? 1), pageSize: '50' })
+  if (filters.range) query.set('range', filters.range)
   if (filters.userId) query.set('userId', filters.userId)
   if (filters.type) query.set('type', filters.type)
   if (filters.outcome) query.set('outcome', filters.outcome)
+  if (filters.sourceIpAddress) query.set('sourceIpAddress', filters.sourceIpAddress)
   return request<AccessActivityPage>(`/api/admin/diagnostics/activity?${query}`, { signal })
 }

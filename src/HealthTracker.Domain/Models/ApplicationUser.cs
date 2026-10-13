@@ -67,6 +67,8 @@ namespace HealthTracker.Domain.Models
         EmailNotVerified,
         NotAllowed,
         ProviderFailure,
+        MobileAuthorizationRejected,
+        MobileTokenRejected,
     }
 
     /// <summary>

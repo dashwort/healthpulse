@@ -196,6 +196,9 @@ public sealed class TestDataStore : IHealthDataStore
         Guid? allowedUserId,
         AccessActivityType? type,
         AccessActivityOutcome? outcome,
+        DateTimeOffset fromUtc,
+        DateTimeOffset toUtc,
+        string? sourceIpAddress,
         int page,
         int pageSize,
         CancellationToken ct
@@ -206,6 +209,9 @@ public sealed class TestDataStore : IHealthDataStore
                 (!allowedUserId.HasValue || activity.AllowedUserId == allowedUserId)
                 && (!type.HasValue || activity.Type == type)
                 && (!outcome.HasValue || activity.Outcome == outcome)
+                && activity.OccurredUtc >= fromUtc
+                && activity.OccurredUtc < toUtc
+                && (sourceIpAddress is null || activity.SourceIpAddress == sourceIpAddress)
             )
             .OrderByDescending(activity => activity.OccurredUtc)
             .ToArray();
@@ -214,6 +220,11 @@ public sealed class TestDataStore : IHealthDataStore
             ? Array.Empty<AccessActivity>()
             : activities.Skip((int)skip).Take(pageSize).ToArray();
         return Task.FromResult<(IReadOnlyCollection<AccessActivity>, int)>((items, activities.Length));
+    }
+
+    public Task<IReadOnlyCollection<AccessActivity>> GetAccessActivitiesForSummaryAsync(CancellationToken ct)
+    {
+        return Task.FromResult<IReadOnlyCollection<AccessActivity>>(AccessActivities.ToArray());
     }
 
     public Task<int> PurgeAccessActivitiesAsync(DateTimeOffset beforeUtc, CancellationToken ct)

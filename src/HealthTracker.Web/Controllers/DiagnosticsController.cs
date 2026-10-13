@@ -19,13 +19,50 @@ namespace HealthTracker.Web.Controllers
             logs.ReadForViewerAsync(ct);
 
         [HttpGet("activity")]
-        public Task<AccessActivityPageDto> GetActivity(
+        public async Task<ActionResult<AccessActivityPageDto>> GetActivity(
             [FromQuery] Guid? userId,
             [FromQuery] AccessActivityType? type,
             [FromQuery] AccessActivityOutcome? outcome,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50,
+            [FromQuery] string range = "24h",
+            [FromQuery] string? sourceIpAddress = null,
             CancellationToken ct = default
-        ) => accessActivity.GetPageAsync(userId, type, outcome, page, pageSize, ct);
+        )
+        {
+            try
+            {
+                return Ok(await accessActivity.GetPageAsync(
+                    userId,
+                    type,
+                    outcome,
+                    page,
+                    pageSize,
+                    range,
+                    sourceIpAddress,
+                    ct
+                ));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new ProblemDetails { Detail = ex.Message });
+            }
+        }
+
+        [HttpGet("activity/summary")]
+        public async Task<ActionResult<AccessActivitySummaryDto>> GetActivitySummary(
+            [FromQuery] string range = "24h",
+            CancellationToken ct = default
+        )
+        {
+            try
+            {
+                return Ok(await accessActivity.GetSummaryAsync(range, ct));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new ProblemDetails { Detail = ex.Message });
+            }
+        }
     }
 }

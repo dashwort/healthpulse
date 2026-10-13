@@ -103,4 +103,35 @@ namespace HealthTracker.Application.Dtos
         int Page,
         int PageSize
     );
+
+    public sealed record AccessActivitySummaryDto(
+        string Range,
+        DateTimeOffset FromUtc,
+        DateTimeOffset ToUtc,
+        int TotalEvents,
+        int SuccessfulWebSignIns,
+        int FailedWebSignIns,
+        int SuccessfulAndroidAuthorizations,
+        int FailedAndroidAuthorizations,
+        int DistinctSourceIpCount,
+        int DistinctAccountCount,
+        int DistinctSuccessfulAccountCount,
+        IReadOnlyCollection<AccessActivityTimelineBucketDto> Timeline,
+        IReadOnlyCollection<AccessActivityReviewCueDto> ReviewCues
+    );
+
+    public sealed record AccessActivityTimelineBucketDto(
+        DateTimeOffset StartUtc,
+        int SuccessCount,
+        int FailureCount
+    );
+
+    public sealed record AccessActivityReviewCueDto(
+        string SourceIpAddress,
+        int FailureCount,
+        DateTimeOffset WindowStartUtc,
+        DateTimeOffset WindowEndUtc,
+        bool SuccessfulSignInAfterBurst,
+        DateTimeOffset? SuccessUtc
+    );
 }

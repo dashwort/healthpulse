@@ -292,6 +292,9 @@ namespace HealthTracker.Infrastructure.Persistence
             Guid? allowedUserId,
             AccessActivityType? type,
             AccessActivityOutcome? outcome,
+            DateTimeOffset fromUtc,
+            DateTimeOffset toUtc,
+            string? sourceIpAddress,
             int page,
             int pageSize,
             CancellationToken ct
@@ -301,20 +304,35 @@ namespace HealthTracker.Infrastructure.Persistence
                 (!allowedUserId.HasValue || x.AllowedUserId == allowedUserId)
                 && (!type.HasValue || x.Type == type.Value.ToString())
                 && (!outcome.HasValue || x.Outcome == outcome.Value.ToString())
+                && (sourceIpAddress == null || x.SourceIpAddress == sourceIpAddress)
             );
-            var totalCount = await query.CountAsync(ct);
+            // SQLite does not consistently translate DateTimeOffset comparisons. Keep the SQL
+            // filters selective, then apply the short (seven-day retention) time window in memory.
+            var activities = (await query.ToArrayAsync(ct))
+                .Select(x => x.ToDomain())
+                .Where(x => x.OccurredUtc >= fromUtc && x.OccurredUtc < toUtc)
+                .OrderByDescending(x => x.OccurredUtc)
+                .ToArray();
+            var totalCount = activities.Length;
             var skip = (long)(page - 1) * pageSize;
             if (skip >= totalCount)
             {
                 return (Array.Empty<AccessActivity>(), totalCount);
             }
 
-            var items = await query
-                .OrderByDescending(x => x.OccurredUtc)
+            var items = activities
                 .Skip((int)skip)
                 .Take(pageSize)
-                .ToArrayAsync(ct);
-            return ([.. items.Select(x => x.ToDomain())], totalCount);
+                .ToArray();
+            return (items, totalCount);
+        }
+
+        public async Task<IReadOnlyCollection<AccessActivity>> GetAccessActivitiesForSummaryAsync(CancellationToken ct)
+        {
+            // Access activity is retained for seven days, so this is a narrowly scoped in-memory
+            // aggregation and avoids SQLite DateTimeOffset translation differences.
+            var activities = await db.AccessActivities.AsNoTracking().ToArrayAsync(ct);
+            return [.. activities.Select(x => x.ToDomain())];
         }
 
         public async Task<int> PurgeAccessActivitiesAsync(DateTimeOffset beforeUtc, CancellationToken ct)

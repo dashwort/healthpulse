@@ -96,6 +96,39 @@ export interface AccessActivityPage {
   pageSize: number
 }
 
+export type AccessActivityRange = '24h' | '7d'
+
+export interface AccessActivityTimelineBucket {
+  startUtc: string
+  successCount: number
+  failureCount: number
+}
+
+export interface AccessActivityReviewCue {
+  sourceIpAddress: string
+  failureCount: number
+  windowStartUtc: string
+  windowEndUtc: string
+  successfulSignInAfterBurst: boolean
+  successUtc: string | null
+}
+
+export interface AccessActivitySummary {
+  range: AccessActivityRange
+  fromUtc: string
+  toUtc: string
+  totalEvents: number
+  successfulWebSignIns: number
+  failedWebSignIns: number
+  successfulAndroidAuthorizations: number
+  failedAndroidAuthorizations: number
+  distinctSourceIpCount: number
+  distinctAccountCount: number
+  distinctSuccessfulAccountCount: number
+  timeline: AccessActivityTimelineBucket[]
+  reviewCues: AccessActivityReviewCue[]
+}
+
 export interface LogSnapshot {
   content: string
   fileCount: number

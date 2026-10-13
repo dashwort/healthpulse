@@ -50,6 +50,10 @@ namespace HealthTracker.Web.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                await RecordAnonymousAndroidFailureAsync(
+                    AccessActivityFailureReason.MobileAuthorizationRejected,
+                    ct
+                );
                 return BadRequest(new ProblemDetails { Detail = ex.Message });
             }
         }
@@ -84,10 +88,26 @@ namespace HealthTracker.Web.Controllers
             }
             catch (KeyNotFoundException)
             {
+                await accessActivityService.RecordForCurrentUserAsync(
+                    AccessActivityType.AndroidAuthorization,
+                    AccessActivityOutcome.Failure,
+                    AccessActivityFailureReason.MobileAuthorizationRejected,
+                    HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    HttpContext.Request.Headers.UserAgent.ToString(),
+                    ct
+                );
                 return NotFound();
             }
             catch (InvalidOperationException ex)
             {
+                await accessActivityService.RecordForCurrentUserAsync(
+                    AccessActivityType.AndroidAuthorization,
+                    AccessActivityOutcome.Failure,
+                    AccessActivityFailureReason.MobileAuthorizationRejected,
+                    HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    HttpContext.Request.Headers.UserAgent.ToString(),
+                    ct
+                );
                 return BadRequest(new ProblemDetails { Detail = ex.Message });
             }
         }
@@ -124,9 +144,27 @@ namespace HealthTracker.Web.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                await RecordAnonymousAndroidFailureAsync(
+                    AccessActivityFailureReason.MobileTokenRejected,
+                    ct
+                );
                 return BadRequest(new ProblemDetails { Detail = ex.Message });
             }
         }
+
+        private Task RecordAnonymousAndroidFailureAsync(
+            AccessActivityFailureReason reason,
+            CancellationToken ct
+        ) => accessActivityService.RecordAsync(
+            AccessActivityRequestDetails.Create(
+                HttpContext,
+                null,
+                AccessActivityType.AndroidAuthorization,
+                AccessActivityOutcome.Failure,
+                reason
+            ),
+            ct
+        );
     }
 
     public sealed class MobileAuthorizeRequest

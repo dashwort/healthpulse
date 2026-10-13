@@ -41,8 +41,14 @@ namespace HealthTracker.Application.Abstractions
             Guid? allowedUserId,
             AccessActivityType? type,
             AccessActivityOutcome? outcome,
+            DateTimeOffset fromUtc,
+            DateTimeOffset toUtc,
+            string? sourceIpAddress,
             int page,
             int pageSize,
+            CancellationToken cancellationToken
+        );
+        Task<IReadOnlyCollection<AccessActivity>> GetAccessActivitiesForSummaryAsync(
             CancellationToken cancellationToken
         );
         Task<int> PurgeAccessActivitiesAsync(DateTimeOffset beforeUtc, CancellationToken cancellationToken);
