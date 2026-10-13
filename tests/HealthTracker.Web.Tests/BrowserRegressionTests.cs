@@ -174,18 +174,31 @@ public sealed class BrowserRegressionTests : IClassFixture<PlaywrightFixture>
     }
 
     [Fact]
-    public async Task Application_logs_page_exposes_admin_diagnostics()
+    public async Task Diagnostics_tabs_separate_traffic_security_and_logs()
     {
         // Arrange
         var page = await fixture.Browser!.NewPageAsync();
 
         // Act
-        await page.GotoAsync(fixture.BaseUrl + "/logs");
+        await page.GotoAsync(fixture.BaseUrl + "/traffic");
 
         // Assert
         await Assertions.Expect(
-                page.GetByRole(AriaRole.Heading, new() { Name = "Application logs", Exact = true })
+                page.GetByRole(AriaRole.Heading, new() { Name = "Traffic", Exact = true })
             )
+            .ToBeVisibleAsync();
+        var diagnosticsTabs = page.GetByRole(AriaRole.Navigation, new() { Name = "Diagnostics pages" });
+        await Assertions.Expect(diagnosticsTabs.GetByRole(AriaRole.Link, new() { Name = "Traffic", Exact = true }))
+            .ToHaveAttributeAsync("aria-current", "page");
+
+        await diagnosticsTabs.GetByRole(AriaRole.Link, new() { Name = "Security", Exact = true }).ClickAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Security", Exact = true }))
+            .ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Access activity", Exact = true }))
+            .ToBeVisibleAsync();
+
+        await diagnosticsTabs.GetByRole(AriaRole.Link, new() { Name = "Logs", Exact = true }).ClickAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Logs", Exact = true }))
             .ToBeVisibleAsync();
         await Assertions.Expect(page.GetByText("Open text view", new() { Exact = true }))
             .ToBeVisibleAsync();
