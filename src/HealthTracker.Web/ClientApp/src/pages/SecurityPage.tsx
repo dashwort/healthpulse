@@ -3,6 +3,7 @@ import {
   getAccessActivity, getAccessActivitySummary, getUsers,
 } from '../api'
 import { DiagnosticsTabs } from '../components/DiagnosticsTabs'
+import { chartYAxisTicks } from '../traffic-formatters'
 import type {
   AccessActivityPage, AccessActivityRange, AccessActivitySummary, AllowedUser,
 } from '../types'
@@ -109,6 +110,7 @@ export function SecurityPage({ announce, onNavigate }: SecurityPageProps) {
   const tickIndices = summary?.timeline.length
     ? [...new Set([0, Math.floor((summary.timeline.length - 1) / 4), Math.floor((summary.timeline.length - 1) / 2), Math.floor(((summary.timeline.length - 1) * 3) / 4), summary.timeline.length - 1])]
     : []
+  const yAxisTicks = chartYAxisTicks(maxCount)
 
   function selectRange(value: AccessActivityRange) {
     if (range === value) return
@@ -183,9 +185,9 @@ export function SecurityPage({ announce, onNavigate }: SecurityPageProps) {
                 <line className="access-chart-grid" x1="42" x2="690" y1="13" y2="13" />
                 <line className="access-chart-grid" x1="42" x2="690" y1="72" y2="72" />
                 <line className="access-chart-grid" x1="42" x2="690" y1="132" y2="132" />
-                <text className="access-chart-label" x="4" y="17">{maxCount}</text>
-                <text className="access-chart-label" x="4" y="76">{Math.floor(maxCount / 2)}</text>
-                <text className="access-chart-label" x="18" y="136">0</text>
+                {yAxisTicks.map((tick) => <text className="access-chart-label" key={tick.y} x={tick.y === 136 ? 18 : 4} y={tick.y}>
+                  {numberFormat.format(tick.value)}
+                </text>)}
                 <polyline className="access-chart-success" fill="none" points={timelinePoints(summary, 'successCount', maxCount)} />
                 <polyline className="access-chart-failure" fill="none" points={timelinePoints(summary, 'failureCount', maxCount)} />
                 {tickIndices.map((index) => {

@@ -20,6 +20,9 @@ namespace HealthTracker.Application.Tests
                     new TrafficMetricBucket(currentBucketStart, "/api/readings", "GET", 200, 0, 2, 24, 16),
                     new TrafficMetricBucket(currentBucketStart, "/api/readings", "GET", 429, 4, 1, 800, 800),
                     new TrafficMetricBucket(currentBucketStart, "/api/readings/{id}", "GET", 500, 7, 1, 6000, 6000),
+                    new TrafficMetricBucket(currentBucketStart, "api/admin/diagnostics/traffic/summary", "GET", 200, 0, 50, 500, 500),
+                    new TrafficMetricBucket(currentBucketStart, "admin/logs/raw", "GET", 200, 0, 30, 500, 500),
+                    new TrafficMetricBucket(currentBucketStart, "admin/logs/download", "GET", 200, 0, 30, 500, 500),
                     new TrafficMetricBucket(
                         currentBucketStart - TimeSpan.FromHours(25).Ticks,
                         "/api/readings",
@@ -29,6 +32,26 @@ namespace HealthTracker.Application.Tests
                         5,
                         70,
                         20
+                    ),
+                    new TrafficMetricBucket(
+                        currentBucketStart - TimeSpan.FromHours(25).Ticks,
+                        "/api/admin/diagnostics/activity",
+                        "GET",
+                        500,
+                        7,
+                        12,
+                        12000,
+                        12000
+                    ),
+                    new TrafficMetricBucket(
+                        currentBucketStart - TimeSpan.FromHours(25).Ticks,
+                        "admin/logs/download",
+                        "GET",
+                        200,
+                        0,
+                        12,
+                        500,
+                        500
                     ),
                     new TrafficMetricBucket(
                         currentBucketStart - TimeSpan.FromHours(49).Ticks,
@@ -58,6 +81,10 @@ namespace HealthTracker.Application.Tests
             summary.Timeline.Should().HaveCount(24);
             summary.TopRoutes.Should().ContainSingle(route => route.RouteTemplate == "/api/readings");
             summary.TopStatuses.Should().Contain(status => status.StatusCode == 429 && status.RequestCount == 1);
+            summary.TopRoutes.Select(route => route.RouteTemplate)
+                .Should()
+                .NotContain(route => route.Contains("diagnostics", StringComparison.OrdinalIgnoreCase)
+                    || route.StartsWith("admin/logs/", StringComparison.OrdinalIgnoreCase));
         }
 
         [Fact]

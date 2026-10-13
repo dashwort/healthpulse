@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getTrafficSummary } from '../api'
 import { DiagnosticsTabs } from '../components/DiagnosticsTabs'
+import { chartYAxisTicks, formatTrafficRouteTemplate } from '../traffic-formatters'
 import type { TrafficRange, TrafficSummary, TrafficTimelineBucket } from '../types'
 
 interface TrafficPageProps {
@@ -82,6 +83,7 @@ export function TrafficPage({ announce, onNavigate }: TrafficPageProps) {
       summary.timeline.length - 1,
     ])]
     : []
+  const yAxisTicks = chartYAxisTicks(maxCount)
 
   return <main className="page wide-page logs-page traffic-page">
     <div className="page-heading">
@@ -152,9 +154,9 @@ export function TrafficPage({ announce, onNavigate }: TrafficPageProps) {
                 <line className="access-chart-grid" x1="42" x2="690" y1="13" y2="13" />
                 <line className="access-chart-grid" x1="42" x2="690" y1="72" y2="72" />
                 <line className="access-chart-grid" x1="42" x2="690" y1="132" y2="132" />
-                <text className="access-chart-label" x="4" y="17">{numberFormat.format(maxCount)}</text>
-                <text className="access-chart-label" x="4" y="76">{numberFormat.format(Math.floor(maxCount / 2))}</text>
-                <text className="access-chart-label" x="18" y="136">0</text>
+                {yAxisTicks.map((tick) => <text className="access-chart-label" key={tick.y} x={tick.y === 136 ? 18 : 4} y={tick.y}>
+                  {numberFormat.format(tick.value)}
+                </text>)}
                 <polyline className="traffic-chart-success" fill="none" points={seriesPoints(summary.timeline, 'successfulResponses', maxCount)} />
                 <polyline className="traffic-chart-client-error" fill="none" points={seriesPoints(summary.timeline, 'clientErrorResponses', maxCount)} />
                 <polyline className="traffic-chart-rate-limit" fill="none" points={seriesPoints(summary.timeline, 'rateLimitedResponses', maxCount)} />
@@ -182,7 +184,7 @@ export function TrafficPage({ announce, onNavigate }: TrafficPageProps) {
                 <div className="access-section-heading"><h3>Most requested routes</h3><span>Top 10</span></div>
                 {summary.topRoutes.length === 0 ? <p className="quiet-empty">No route data yet.</p> : <div className="traffic-route-list">
                   {summary.topRoutes.map((route) => <article className="traffic-route" key={`${route.method}:${route.routeTemplate}`}>
-                    <div><span className="traffic-method">{route.method}</span><code>{route.routeTemplate}</code></div>
+                    <div><span className="traffic-method">{route.method}</span><code>{formatTrafficRouteTemplate(route.routeTemplate)}</code></div>
                     <small>{numberFormat.format(route.requestCount)} requests · {numberFormat.format(route.errorCount)} errors · p95 {latencyLabel(route.p95LatencyBand)}</small>
                   </article>)}
                 </div>}

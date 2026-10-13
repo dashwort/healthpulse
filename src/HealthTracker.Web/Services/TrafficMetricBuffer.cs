@@ -15,6 +15,11 @@ namespace HealthTracker.Web.Services
 
         public void Record(HttpContext context, int responseStatusCode, long elapsedMilliseconds)
         {
+            if (IsDiagnosticsRequest(context))
+            {
+                return;
+            }
+
             var nowTicks = DateTimeOffset.UtcNow.UtcTicks;
             var bucketStartTicks = nowTicks - nowTicks % BucketDurationTicks;
             var routeTemplate = GetRouteTemplate(context);
@@ -93,6 +98,21 @@ namespace HealthTracker.Web.Services
 
             // Do not persist arbitrary unmatched paths; they can contain identifiers or user-supplied data.
             return "unmatched";
+        }
+
+        private static bool IsDiagnosticsRequest(HttpContext context)
+        {
+            if (context.GetEndpoint() is not RouteEndpoint endpoint
+                || string.IsNullOrWhiteSpace(endpoint.RoutePattern.RawText))
+            {
+                return false;
+            }
+
+            var routeTemplate = endpoint.RoutePattern.RawText.TrimStart('/');
+            return routeTemplate.Equals("api/admin/diagnostics", StringComparison.OrdinalIgnoreCase)
+                || routeTemplate.StartsWith("api/admin/diagnostics/", StringComparison.OrdinalIgnoreCase)
+                || routeTemplate.Equals("admin/logs/raw", StringComparison.OrdinalIgnoreCase)
+                || routeTemplate.Equals("admin/logs/download", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string NormalizeMethod(string method) => method.ToUpperInvariant() switch

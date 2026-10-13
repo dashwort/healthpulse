@@ -14,11 +14,14 @@ namespace HealthTracker.Application.Services
             var previousFromUtc = window.FromUtc - window.Duration;
             var currentWindowStartTicks = FloorToMetricBucket(window.FromUtc.UtcTicks);
             var previousWindowStartTicks = FloorToMetricBucket(previousFromUtc.UtcTicks);
-            var buckets = await dataStore.GetTrafficMetricBucketsAsync(
-                previousWindowStartTicks,
-                window.ToUtc.UtcTicks,
-                ct
-            );
+            var buckets = (await dataStore.GetTrafficMetricBucketsAsync(
+                    previousWindowStartTicks,
+                    window.ToUtc.UtcTicks,
+                    ct
+                ))
+                // Ignore older self-generated diagnostics requests as well as new requests skipped at capture time.
+                .Where(bucket => !IsDiagnosticsRoute(bucket.RouteTemplate))
+                .ToArray();
             var current = buckets.Where(bucket => bucket.BucketStartUtcTicks >= currentWindowStartTicks).ToArray();
             var previous = buckets.Where(bucket => bucket.BucketStartUtcTicks < currentWindowStartTicks).ToArray();
 
@@ -157,6 +160,15 @@ namespace HealthTracker.Application.Services
         {
             var bucketTicks = TimeSpan.FromMinutes(5).Ticks;
             return utcTicks - utcTicks % bucketTicks;
+        }
+
+        private static bool IsDiagnosticsRoute(string routeTemplate)
+        {
+            var normalized = routeTemplate.TrimStart('/');
+            return normalized.Equals("api/admin/diagnostics", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("api/admin/diagnostics/", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("admin/logs/raw", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("admin/logs/download", StringComparison.OrdinalIgnoreCase);
         }
 
         private static int GetQuantileBand(IEnumerable<TrafficMetricBucket> buckets, double quantile)
