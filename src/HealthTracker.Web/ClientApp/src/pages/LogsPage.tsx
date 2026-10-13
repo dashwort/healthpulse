@@ -163,16 +163,16 @@ export function LogsPage({ announce }: LogsPageProps) {
               <h3 id="activity-timeline-title">Sign-in activity</h3>
               <span>Events by {range === '24h' ? 'hour' : 'day'}</span>
             </div>
-            {summary.timeline.length === 0 ? <p className="quiet-empty">No access activity in this period.</p> : <>
-              <svg className="access-chart" viewBox="0 0 700 172" role="img" aria-label={'Successful and failed authentication events over the last ' + (range === '24h' ? '24 hours' : '7 days')}>
+            {summary.totalEvents === 0 ? <p className="quiet-empty access-chart-empty">No authentication events in this period.</p> : <>
+              <svg className="access-chart" viewBox="0 0 700 172" role="img" aria-label={`Authentication events by ${range === '24h' ? 'hour' : 'day'}: ${numberFormat.format(successes)} successful and ${numberFormat.format(failures)} failed over the last ${range === '24h' ? '24 hours' : '7 days'}`}>
                 <line className="access-chart-grid" x1="42" x2="690" y1="13" y2="13" />
                 <line className="access-chart-grid" x1="42" x2="690" y1="72" y2="72" />
                 <line className="access-chart-grid" x1="42" x2="690" y1="132" y2="132" />
                 <text className="access-chart-label" x="4" y="17">{maxCount}</text>
                 <text className="access-chart-label" x="4" y="76">{Math.floor(maxCount / 2)}</text>
                 <text className="access-chart-label" x="18" y="136">0</text>
-                <polyline className="access-chart-success" points={timelinePoints(summary, 'successCount', maxCount)} />
-                <polyline className="access-chart-failure" points={timelinePoints(summary, 'failureCount', maxCount)} />
+                <polyline className="access-chart-success" fill="none" points={timelinePoints(summary, 'successCount', maxCount)} />
+                <polyline className="access-chart-failure" fill="none" points={timelinePoints(summary, 'failureCount', maxCount)} />
                 {tickIndices.map((index) => {
                   const bucket = summary.timeline[index]
                   const x = 42 + (648 * index) / Math.max(1, summary.timeline.length - 1)

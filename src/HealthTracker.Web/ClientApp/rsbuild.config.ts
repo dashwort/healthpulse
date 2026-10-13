@@ -10,24 +10,15 @@ export default defineConfig({
   },
   html: {
     title: 'HealthPulse',
-    tags: [
-      {
-        tag: 'link',
-        attrs: { href: 'styles.css', rel: 'stylesheet' },
-        head: true,
-        publicPath: true,
-      },
-      {
-        tag: 'meta',
-        attrs: { name: 'theme-color', content: '#f7f5ef' },
-        head: true,
-      },
-    ],
+    tags: [{
+      tag: 'meta',
+      attrs: { name: 'theme-color', content: '#f7f5ef' },
+      head: true,
+    }],
   },
   output: {
     assetPrefix: '/app/',
     cleanDistPath: true,
-    copy: [{ from: './src/styles.css', to: 'styles.css' }],
     distPath: {
       root: '../wwwroot/app',
     },

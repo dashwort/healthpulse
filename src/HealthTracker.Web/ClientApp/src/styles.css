@@ -449,6 +449,7 @@ select:focus-visible {
 .review-cue p { color: var(--air-muted); font-size: 11px; line-height: 1.5; margin: 6px 0; }
 .review-cue code,
 .activity-source code { color: var(--air-ink); font-family: Consolas, monospace; font-size: 11px; }
+.review-cue code { overflow-wrap: anywhere; }
 .review-cue .review-cue-followup { color: var(--air-ink); }
 .review-cue .text-action { font-size: 10px; margin-top: 2px; padding: 4px 0; }
 .access-no-cues { border-bottom: 1px solid var(--air-line); color: var(--air-muted); font-size: 11px; line-height: 1.5; margin: 0; padding: 13px 0; }
@@ -853,6 +854,10 @@ select:focus-visible {
   }
 }
 
+@media (max-width: 800px) {
+  .access-insights { grid-template-columns: 1fr; gap: 29px; }
+}
+
 @media (max-width: 660px) {
   .app-header {
     gap: 15px;
@@ -913,7 +918,6 @@ select:focus-visible {
   .access-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 16px; }
   .access-summary-item:nth-child(2) { border-right: 0; padding-right: 0; }
   .access-summary-item:nth-child(3) { padding-left: 0; }
-  .access-insights { grid-template-columns: 1fr; gap: 29px; }
   .access-chart { margin-top: 15px; }
   .logs-filter-line { gap: 18px; margin-bottom: 25px; }
   .ip-filter-actions { align-self: flex-start; min-height: 32px; }
