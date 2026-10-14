@@ -14,14 +14,13 @@ namespace HealthTracker.Application.Services
             var previousFromUtc = window.FromUtc - window.Duration;
             var currentWindowStartTicks = FloorToMetricBucket(window.FromUtc.UtcTicks);
             var previousWindowStartTicks = FloorToMetricBucket(previousFromUtc.UtcTicks);
-            var buckets = (await dataStore.GetTrafficMetricBucketsAsync(
-                    previousWindowStartTicks,
-                    window.ToUtc.UtcTicks,
-                    ct
-                ))
-                // Ignore older self-generated diagnostics requests as well as new requests skipped at capture time.
-                .Where(bucket => !IsDiagnosticsRoute(bucket.RouteTemplate))
-                .ToArray();
+            var storedBuckets = await dataStore.GetTrafficMetricBucketsAsync(
+                previousWindowStartTicks,
+                window.ToUtc.UtcTicks,
+                ct
+            );
+            // Ignore older self-generated diagnostics requests as well as new requests skipped at capture time.
+            var buckets = storedBuckets.Where(bucket => !IsDiagnosticsRoute(bucket.RouteTemplate)).ToArray();
             var current = buckets.Where(bucket => bucket.BucketStartUtcTicks >= currentWindowStartTicks).ToArray();
             var previous = buckets.Where(bucket => bucket.BucketStartUtcTicks < currentWindowStartTicks).ToArray();
 
