@@ -20,6 +20,8 @@ This project is provided for personal tracking and software development purposes
 
 Every data-store operation is user-scoped using the trusted OIDC subject. Controllers never accept a user ID, so one user cannot request another user's templates or readings.
 
+For the full workflow, regression-test, container deployment, and Android release sequence, see [CI/CD and GitHub Actions](docs/ci-cd.md).
+
 ## Getting started
 
 ### Prerequisites
