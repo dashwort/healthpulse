@@ -17,9 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24.x'
       - name: Install pnpm
@@ -34,7 +36,7 @@ jobs:
         working-directory: src/HealthTracker.Web/ClientApp
         run: pnpm build
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
       - name: Restore dependencies
@@ -55,7 +57,7 @@ jobs:
         run: dotnet test HealthTracker.slnx --configuration Release --no-build --collect:"XPlat Code Coverage" --logger trx --results-directory TestResults
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: test-results-${{ github.run_id }}
           path: TestResults
@@ -66,9 +68,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
         with:
           distribution: temurin
           java-version: "21"
@@ -84,7 +88,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Run Android instrumented tests
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 36
           target: google_apis
@@ -96,7 +100,7 @@ jobs:
           script: ./gradlew connectedDebugAndroidTest
       - name: Upload Android test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: android-test-results-${{ github.run_id }}
           path: |
@@ -105,74 +109,81 @@ jobs:
           if-no-files-found: ignore
 
   container:
-    name: Build container
+    name: Build container without publication credentials
     needs: [build-test, android-test]
     runs-on: ubuntu-latest
-    outputs:
-      image_digest: ${{ steps.build-image.outputs.digest }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Collect candidate metadata
+        id: candidate
+        shell: bash
+        run: |
+          set -eu
+          VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props)"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+      - name: Build immutable candidate once
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          push: false
+          tags: healthpulse-ci:${{ github.sha }}
+          outputs: type=docker,dest=${{ runner.temp }}/healthpulse-image.tar
+          build-args: |
+            DEPLOYMENT_VERSION=${{ steps.candidate.outputs.version }}
+            DEPLOYMENT_BUILT_AT_UTC=${{ steps.candidate.outputs.built_at }}
+            DEPLOYMENT_COMMIT=${{ github.sha }}
+            DEPLOYMENT_BUILD=${{ github.run_number }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: healthpulse-image-${{ github.sha }}
+          path: ${{ runner.temp }}/healthpulse-image.tar
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-candidate:
+    name: Publish tested candidate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: container
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Log in to GitHub Container Registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: healthpulse-image-${{ github.sha }}
+          path: ${{ runner.temp }}/candidate
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Extract image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-,format=short
-      - name: Collect deployment metadata
-        id: deployment
-        shell: bash
-        run: |
-          VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props)"
-          test -n "$VERSION"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "build=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-          echo "built_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
-      - name: Build and publish container
-        id: build-image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            DEPLOYMENT_VERSION=${{ steps.deployment.outputs.version }}
-            DEPLOYMENT_BUILD=${{ steps.deployment.outputs.build }}
-            DEPLOYMENT_COMMIT=${{ steps.deployment.outputs.commit }}
-            DEPLOYMENT_BUILT_AT_UTC=${{ steps.deployment.outputs.built_at_utc }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy-production:
-    name: Deploy production image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: container
-    runs-on: [self-hosted, linux, x64, healthpulse-production]
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Deploy immutable image digest
+      - name: Publish exact tested image without rebuilding
         env:
-          IMAGE_DIGEST: ${{ needs.container.outputs.image_digest }}
+          SOURCE_SHA: ${{ github.sha }}
         run: |
           set -eu
-          test -n "$IMAGE_DIGEST"
-          sudo /usr/local/sbin/healthpulse-deploy "$IMAGE_DIGEST"
+          docker load --input "$RUNNER_TEMP/candidate/healthpulse-image.tar"
+          docker tag "healthpulse-ci:$SOURCE_SHA" "ghcr.io/dashwort/healthpulse:sha-$SOURCE_SHA"
+          docker push "ghcr.io/dashwort/healthpulse:sha-$SOURCE_SHA"
+
+  production-admission:
+    name: Production admission
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish-candidate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require verified deployment broker
+        run: |
+          echo 'Production deployment is blocked until the independently verified broker, rollback and backup gates are installed.'
+          exit 1
